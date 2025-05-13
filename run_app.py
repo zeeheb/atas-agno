@@ -25,7 +25,7 @@ def main():
         # Welcome message
         print("""
         ╔════════════════════════════════════════════╗
-        ║          ATAS - Analisador de Atas         ║
+        ║        iATAS - Analisador de ATAS          ║
         ╚════════════════════════════════════════════╝
         
         Iniciando aplicação...

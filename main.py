@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Application constants
-APP_TITLE = "ATAS - Analisador de Atas"
+APP_TITLE = "iATAS - Analisador de ATAS"
 APP_VERSION = "1.2.0"
 APP_DATA_DIR = "app_data"
 

@@ -1,6 +1,6 @@
-# ATAS - Analisador de Atas
+# iATAS - Analisador de ATAS
 
-ATAS é uma aplicação para análise de atas de reuniões usando inteligência artificial.
+iATAS é uma aplicação para análise de atas de reuniões usando inteligência artificial.
 
 ## Requisitos
 
