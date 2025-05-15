@@ -525,7 +525,7 @@ class SettingsView(QWidget):
         self.back_button = QPushButton("Voltar")
         self.back_button.setIcon(QIcon.fromTheme("go-previous"))
         self.back_button.clicked.connect(self.go_back)
-        self.back_button.setFont(QFont("Arial", 11))
+        self.back_button.setFont(QFont("Segoe UI", 11))
         self.back_button.setMinimumHeight(40)
         # Remove fixed width to show text properly
         self.back_button.setStyleSheet("""
@@ -757,8 +757,10 @@ class MainWindow(QMainWindow):
         
         # Header with controls for history
         history_header = QHBoxLayout()
+        
+        # History title with modern font
         history_title = QLabel("Histórico de Conversas")
-        history_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        history_title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         history_title.setStyleSheet("color: #4a6fc3; margin-bottom: 5px;")
         history_header.addWidget(history_title)
         
@@ -770,7 +772,7 @@ class MainWindow(QMainWindow):
         self.clear_history_button.setToolTip("Limpar Histórico")
         self.clear_history_button.clicked.connect(self.clear_chat_history)
         self.clear_history_button.setFixedSize(160, 32)  # Increased width from 140 to 160
-        self.clear_history_button.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        self.clear_history_button.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         
         self.clear_history_button.setStyleSheet("""
             QPushButton {
@@ -782,6 +784,7 @@ class MainWindow(QMainWindow):
                 margin: 2px;
                 text-align: center;
                 qproperty-alignment: AlignCenter;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
             }
             QPushButton:hover {
                 background-color: #ffe0e0;
@@ -796,7 +799,7 @@ class MainWindow(QMainWindow):
         """)
         history_header.addWidget(self.clear_history_button)
         
-        # Settings button with icon
+        # Settings button with icon and modern font
         self.settings_button = QPushButton()
         self.settings_button.setToolTip("Configurações")
         self.settings_button.clicked.connect(self.show_settings)
@@ -805,7 +808,7 @@ class MainWindow(QMainWindow):
         # Direct use of icon character in button text
         self.settings_button.setText("⚙")
         # Set smaller font size for better proportions
-        self.settings_button.setFont(QFont("Arial", 13))
+        self.settings_button.setFont(QFont("Segoe UI", 13))
         # Make icon centered in button
         self.settings_button.setStyleSheet("""
             QPushButton {
@@ -815,6 +818,7 @@ class MainWindow(QMainWindow):
                 padding: 0;
                 margin: 2px;
                 text-align: center;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
             }
             QPushButton:hover {
                 color: #4a6fc3;
@@ -842,7 +846,7 @@ class MainWindow(QMainWindow):
         history_document = self.history_content.document()
         history_document.setDefaultStyleSheet("""
             body {
-                font-family: 'Segoe UI', Arial, sans-serif;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
                 margin: 0;
                 padding: 0;
                 font-size: 12px;
@@ -934,9 +938,9 @@ class MainWindow(QMainWindow):
         separator.setStyleSheet("background-color: #e0e4e8; margin-top: 5px; margin-bottom: 10px;")
         layout.addWidget(separator)
         
-        # Question input
+        # Question input with modern font
         question_label = QLabel("Faça sua pergunta sobre as atas:")
-        question_label.setFont(QFont("Arial", 14))
+        question_label.setFont(QFont("Segoe UI", 14))
         question_label.setStyleSheet("color: #4a6fc3; margin-top: 10px; font-weight: bold;")
         layout.addWidget(question_label)
         
@@ -951,6 +955,7 @@ class MainWindow(QMainWindow):
                 padding: 10px;
                 background-color: white;
                 color: #363a43;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
             }
             QTextEdit:focus {
                 border: 1px solid #5c85d6;
@@ -959,21 +964,21 @@ class MainWindow(QMainWindow):
         """)
         layout.addWidget(self.question_input)
         
-        # Buttons
+        # Buttons with modern font
         button_layout = QHBoxLayout()
         
         self.ask_button = QPushButton("Perguntar")
         self.ask_button.setIcon(QIcon.fromTheme("dialog-question"))
         self.ask_button.clicked.connect(self.process_question)
         self.ask_button.setEnabled(False)  # Disabled until documents are loaded
-        self.ask_button.setFont(button_font)
+        self.ask_button.setFont(QFont("Segoe UI", 11))
         self.ask_button.setMinimumHeight(40)
         button_layout.addWidget(self.ask_button)
         
         self.load_docs_button = QPushButton("Carregar Documentos")
         self.load_docs_button.setIcon(QIcon.fromTheme("document-open"))
         self.load_docs_button.clicked.connect(self.load_documents)
-        self.load_docs_button.setFont(button_font)
+        self.load_docs_button.setFont(QFont("Segoe UI", 11))
         self.load_docs_button.setMinimumHeight(40)
         button_layout.addWidget(self.load_docs_button)
         
@@ -1040,7 +1045,7 @@ class MainWindow(QMainWindow):
                 padding: 10px;
                 background-color: white;
                 color: #363a43;
-                font-family: 'Segoe UI', Arial, sans-serif;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
             }
             QPushButton {
                 background-color: #5c85d6;
@@ -1049,6 +1054,7 @@ class MainWindow(QMainWindow):
                 padding: 10px 18px;
                 border-radius: 6px;
                 font-weight: bold;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
             }
             QPushButton:hover {
                 background-color: #4a6fc3;
@@ -1063,15 +1069,18 @@ class MainWindow(QMainWindow):
             QLabel {
                 font-weight: bold;
                 color: #363a43;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
             }
             QProgressDialog {
                 background-color: white;
                 border-radius: 6px;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
             }
             QStatusBar {
                 background-color: #e9ecf2;
                 color: #515769;
                 border-top: 1px solid #d0d4db;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
             }
         """)
 
