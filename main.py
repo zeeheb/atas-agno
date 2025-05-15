@@ -797,15 +797,6 @@ class MainWindow(QMainWindow):
         self.load_docs_button.setMinimumHeight(40)
         button_layout.addWidget(self.load_docs_button)
         
-        # Add refresh button
-        self.refresh_button = QPushButton("Atualizar Índice")
-        self.refresh_button.setIcon(QIcon.fromTheme("view-refresh"))
-        self.refresh_button.clicked.connect(self.reload_documents)
-        self.refresh_button.setEnabled(False)  # Disabled until documents are loaded
-        self.refresh_button.setFont(button_font)
-        self.refresh_button.setMinimumHeight(40)
-        button_layout.addWidget(self.refresh_button)
-        
         layout.addLayout(button_layout)
         
         # Hidden response output for storing responses
@@ -940,18 +931,15 @@ class MainWindow(QMainWindow):
                     self._update_document_status(f"{file_count} documentos carregados")
                     self.doc_count_label.setText(f"Documentos: {file_count}")
                     self.ask_button.setEnabled(True)
-                    self.refresh_button.setEnabled(True)
                 else:
                     self._update_document_status("Nenhum documento encontrado na base de dados")
                     self.ask_button.setEnabled(False)
-                    self.refresh_button.setEnabled(False)
                     
                 self.status_bar.showMessage("Dados carregados com sucesso!", 3000)
             else:
                 self._update_document_status("Nenhum documento encontrado na base de dados")
                 self.status_bar.showMessage("Nenhum dado persistido encontrado", 3000)
                 self.ask_button.setEnabled(False)
-                self.refresh_button.setEnabled(False)
                 
         except Exception as e:
             logger.error(f"Error loading persisted data: {str(e)}")
@@ -1234,7 +1222,6 @@ class MainWindow(QMainWindow):
             # Disable buttons during loading
             self.load_docs_button.setEnabled(False)
             self.ask_button.setEnabled(False)
-            self.refresh_button.setEnabled(False)
             
             # Create progress dialog
             self.progress = QProgressDialog("Carregando documentos...", "Cancelar", 0, 100, self)
@@ -1262,23 +1249,6 @@ class MainWindow(QMainWindow):
             logger.error(f"Error starting document loading: {str(e)}")
             self._on_document_load_error(str(e), None)
 
-    def reload_documents(self):
-        """Reload and reindex documents"""
-        reply = QMessageBox.question(
-            self, 
-            "Reindexar Documentos", 
-            "Tem certeza que deseja reindexar todos os documentos? Isso pode levar algum tempo.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            # Clear vector store first
-            self.vector_db.clear()
-            
-            # Then reload
-            self.load_documents()
-
     def _show_memory_warning(self, message):
         """Show memory warning message"""
         self.progress.setLabelText(message)
@@ -1291,7 +1261,6 @@ class MainWindow(QMainWindow):
         self.progress.close()
         self.load_docs_button.setEnabled(True)
         self.ask_button.setEnabled(True)
-        self.refresh_button.setEnabled(True)
         
         # Count unique file sources in metadata instead of total chunks
         sources = set()
@@ -1319,7 +1288,6 @@ class MainWindow(QMainWindow):
             progress.close()
         self.load_docs_button.setEnabled(True)
         self.ask_button.setEnabled(True)
-        self.refresh_button.setEnabled(True)
         self._update_document_status("Erro ao carregar documentos")
         QMessageBox.critical(self, "Erro", f"Erro ao carregar documentos: {error_message}")
         self.status_bar.showMessage(f"Erro: {error_message}", 5000)
