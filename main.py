@@ -565,7 +565,9 @@ class MainWindow(QMainWindow):
                 knowledge=self.vector_db,
                 search_knowledge=True,
                 show_tool_calls=False,
+                
                 markdown=False,
+                add_history_to_messages=True,
                 instructions='''
                     "Você é um assistente especializado em analisar atas de reuniões em formato .pdf. Sempre que o usuário fizer uma pergunta,
                     primeiro reformule-a para torná-la mais clara e específica, com foco em palavras-chave, datas, pessoas ou eventos relevantes,
