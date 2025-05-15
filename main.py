@@ -674,7 +674,7 @@ class MainWindow(QMainWindow):
                 margin: 20px 0 10px 0;
                 border-radius: 4px;
                 border-left: 4px solid #2a6fc9;
-                font-size: 16px;
+                font-size: 20px;
             }
             .chat-entry {
                 margin-bottom: 20px;
@@ -686,7 +686,7 @@ class MainWindow(QMainWindow):
             }
             .timestamp {
                 color: #888;
-                font-size: 10pt;
+                font-size: 14pt;
                 margin-bottom: 8px;
                 text-align: right;
             }
@@ -696,28 +696,28 @@ class MainWindow(QMainWindow):
             .q-label, .a-label {
                 font-weight: bold;
                 margin-bottom: 4px;
-                font-size: 15px;
+                font-size: 19px;
             }
             .q-label {
-                color: #2a6fc9;
+                color: #00A000;
             }
             .a-label {
-                color: #1e7b34;
+                color: #FF8C00;
             }
             .q-content, .a-content {
                 margin-left: 10px;
                 line-height: 1.5;
                 padding: 4px 0;
-                font-size: 14px;
+                font-size: 18px;
             }
             .q-content {
-                background-color: rgba(42, 111, 201, 0.05);
-                border-left: 3px solid #2a6fc9;
+                background-color: rgba(0, 160, 0, 0.05);
+                border-left: 3px solid #00A000;
                 padding-left: 8px;
             }
             .a-content {
-                background-color: rgba(30, 123, 52, 0.05);
-                border-left: 3px solid #1e7b34;
+                background-color: rgba(255, 140, 0, 0.05);
+                border-left: 3px solid #FF8C00;
                 padding-left: 8px;
             }
         """)
@@ -1429,7 +1429,7 @@ class ChatHistory:
                 <div class="chat-entry">
                     <div class="timestamp">{time_str}</div>
                     <div class="question">
-                        <div class="q-label">Pergunta:</div>
+                        <div class="q-label">Você:</div>
                         <div class="q-content">{question}</div>
                     </div>
                     <div class="answer">
