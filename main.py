@@ -609,20 +609,27 @@ class MainWindow(QMainWindow):
         # App title and info
         header_layout = QHBoxLayout()
         title_label = QLabel(f"{APP_TITLE}")
-        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        title_label.setFont(QFont("Arial", 18, QFont.Weight.Bold))
+        title_label.setStyleSheet("color: #5c85d6; margin-bottom: 5px;")
         header_layout.addWidget(title_label)
         
         # Document status
         self.doc_status_label = QLabel("Sem documentos carregados")
-        self.doc_status_label.setStyleSheet("color: #666;")
+        self.doc_status_label.setStyleSheet("color: #939aab;")
         header_layout.addWidget(self.doc_status_label, alignment=Qt.AlignmentFlag.AlignRight)
         
         layout.addLayout(header_layout)
         
+        # Version label
+        version_label = QLabel(f"v{APP_VERSION}")
+        version_label.setStyleSheet("color: #939aab; font-size: 11px;")
+        version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(version_label)
+        
         # Separator line
         separator = QLabel()
         separator.setFixedHeight(1)
-        separator.setStyleSheet("background-color: #ccc;")
+        separator.setStyleSheet("background-color: #e0e4e8; margin-top: 5px; margin-bottom: 10px;")
         layout.addWidget(separator)
         
         # History layout
@@ -635,6 +642,7 @@ class MainWindow(QMainWindow):
         history_header = QHBoxLayout()
         history_title = QLabel("Histórico de Conversas")
         history_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        history_title.setStyleSheet("color: #4a6fc3; margin-bottom: 5px;")
         history_header.addWidget(history_title)
         
         # Clear history button
@@ -643,6 +651,23 @@ class MainWindow(QMainWindow):
         self.clear_history_button.clicked.connect(self.clear_chat_history)
         self.clear_history_button.setFont(button_font)
         self.clear_history_button.setMinimumHeight(40)
+        self.clear_history_button.setStyleSheet("""
+            QPushButton {
+                background-color: #f0f2f5;
+                color: #515769;
+                border: 1px solid #e0e4e8;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e9ecf2;
+                color: #e53e3e;
+            }
+            QPushButton:pressed {
+                background-color: #e0e4e8;
+            }
+        """)
         history_header.addWidget(self.clear_history_button, alignment=Qt.AlignmentFlag.AlignRight)
         
         history_container.addLayout(history_header)
@@ -664,29 +689,31 @@ class MainWindow(QMainWindow):
                 font-family: 'Segoe UI', Arial, sans-serif;
                 margin: 0;
                 padding: 0;
-                font-size: 14px;
+                font-size: 12px;
+                background-color: #f8f9fa;
             }
             .date-header {
-                background-color: #f2f7fd;
-                color: #2a6fc9;
+                background-color: #eef2f9;
+                color: #5c85d6;
                 font-weight: bold;
-                padding: 8px 12px;
-                margin: 20px 0 10px 0;
-                border-radius: 4px;
-                border-left: 4px solid #2a6fc9;
-                font-size: 20px;
+                padding: 10px 14px;
+                margin: 20px 0 12px 0;
+                border-radius: 6px;
+                border-left: 4px solid #5c85d6;
+                font-size: 18px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
             }
             .chat-entry {
                 margin-bottom: 20px;
-                padding: 12px;
-                border: 1px solid #e0e0e0;
-                border-radius: 5px;
-                background-color: #f9f9f9;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                padding: 16px;
+                border: 1px solid #e0e4e8;
+                border-radius: 8px;
+                background-color: white;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
             }
             .timestamp {
-                color: #888;
-                font-size: 14pt;
+                color: #939aab;
+                font-size: 12pt;
                 margin-bottom: 8px;
                 text-align: right;
             }
@@ -696,29 +723,31 @@ class MainWindow(QMainWindow):
             .q-label, .a-label {
                 font-weight: bold;
                 margin-bottom: 4px;
-                font-size: 19px;
+                font-size: 17px;
             }
             .q-label {
-                color: #00A000;
+                color: #38a169;
             }
             .a-label {
-                color: #FF8C00;
+                color: #dd6b20;
             }
             .q-content, .a-content {
                 margin-left: 10px;
-                line-height: 1.5;
-                padding: 4px 0;
-                font-size: 18px;
+                line-height: 1.6;
+                padding: 6px 0;
+                font-size: 16px;
             }
             .q-content {
-                background-color: rgba(0, 160, 0, 0.05);
-                border-left: 3px solid #00A000;
-                padding-left: 8px;
+                background-color: rgba(56, 161, 105, 0.05);
+                border-left: 3px solid #38a169;
+                padding-left: 12px;
+                border-radius: 0 4px 4px 0;
             }
             .a-content {
-                background-color: rgba(255, 140, 0, 0.05);
-                border-left: 3px solid #FF8C00;
-                padding-left: 8px;
+                background-color: rgba(221, 107, 32, 0.05);
+                border-left: 3px solid #dd6b20;
+                padding-left: 12px;
+                border-radius: 0 4px 4px 0;
             }
         """)
         
@@ -732,13 +761,27 @@ class MainWindow(QMainWindow):
         
         # Question input
         question_label = QLabel("Faça sua pergunta sobre as atas:")
-        question_label.setFont(QFont("Arial", 12))
+        question_label.setFont(QFont("Arial", 14))
+        question_label.setStyleSheet("color: #4a6fc3; margin-top: 10px; font-weight: bold;")
         layout.addWidget(question_label)
         
         self.question_input = QTextEdit()
         self.question_input.setPlaceholderText("Digite sua pergunta aqui...")
         self.question_input.setMaximumHeight(100)
         self.question_input.setFont(QFont("Segoe UI", 14))
+        self.question_input.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #e0e4e8;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: white;
+                color: #363a43;
+            }
+            QTextEdit:focus {
+                border: 1px solid #5c85d6;
+                background-color: #fafbfc;
+            }
+        """)
         layout.addWidget(self.question_input)
         
         # Buttons
@@ -801,54 +844,66 @@ class MainWindow(QMainWindow):
         
     def _update_memory_usage(self):
         """Update memory usage display"""
-        memory_mb = get_memory_usage()
-        self.memory_label.setText(f"Memória: {memory_mb:.1f} MB")
-        
-        # If memory usage is high, change color
-        if memory_mb > 1000:
-            self.memory_label.setStyleSheet("color: red;")
-        else:
-            self.memory_label.setStyleSheet("color: black;")
-
+        try:
+            memory_mb = get_memory_usage()
+            self.memory_label.setText(f"Memória: {memory_mb:.1f} MB")
+            
+            # Change color based on memory usage
+            if memory_mb > 500:
+                self.memory_label.setStyleSheet("color: #e53e3e; font-weight: bold;")  # High memory use (red)
+            elif memory_mb > 300:
+                self.memory_label.setStyleSheet("color: #dd6b20; font-weight: bold;")  # Medium memory use (orange)
+            else:
+                self.memory_label.setStyleSheet("color: #515769;")                     # Normal memory use
+        except Exception as e:
+            logger.error(f"Error updating memory usage: {e}")
+            
     def _apply_styles(self):
         """Apply styles to components"""
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #f5f5f5;
+                background-color: #f8f9fa;
             }
             QTextEdit {
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                padding: 8px;
+                border: 1px solid #e0e4e8;
+                border-radius: 8px;
+                padding: 10px;
                 background-color: white;
-                color: #333333;
+                color: #363a43;
                 font-family: 'Segoe UI', Arial, sans-serif;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
             }
             QPushButton {
-                background-color: #2a6fc9;
+                background-color: #5c85d6;
                 color: white;
                 border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
+                padding: 10px 18px;
+                border-radius: 6px;
                 font-weight: bold;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             }
             QPushButton:hover {
-                background-color: #1c54a0;
+                background-color: #4a6fc3;
+            }
+            QPushButton:pressed {
+                background-color: #3a5fb3;
             }
             QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
+                background-color: #d8dde5;
+                color: #939aab;
             }
             QLabel {
                 font-weight: bold;
-                color: #333;
+                color: #363a43;
             }
             QProgressDialog {
                 background-color: white;
+                border-radius: 6px;
             }
             QStatusBar {
-                background-color: #f0f0f0;
-                color: #333;
+                background-color: #e9ecf2;
+                color: #515769;
+                border-top: 1px solid #d0d4db;
             }
         """)
 
@@ -898,9 +953,9 @@ class MainWindow(QMainWindow):
         """Update document status display"""
         self.doc_status_label.setText(text)
         if "carregados" in text.lower() or "indexados" in text.lower():
-            self.doc_status_label.setStyleSheet("color: green; font-weight: bold;")
+            self.doc_status_label.setStyleSheet("color: #38a169; font-weight: bold;")
         else:
-            self.doc_status_label.setStyleSheet("color: #666;")
+            self.doc_status_label.setStyleSheet("color: #939aab;")
 
     def process_question(self):
         """Process the user's question"""
@@ -933,7 +988,7 @@ class MainWindow(QMainWindow):
         
         # Clear and set placeholder in the response area
         self.response_output.clear()
-        self.response_output.setTextColor(Qt.GlobalColor.darkGray)
+        self.response_output.setTextColor(QColor("#939aab"))
         self.response_output.append("⏳ Processando sua pergunta...")
         
         # Create and start worker thread
@@ -1143,30 +1198,28 @@ class MainWindow(QMainWindow):
         return result.strip()
 
     def handle_error(self, error_message):
-        """Handle any errors that occur"""
-        # Update the response output with the error
+        """Handle an error message"""
+        logging.error(f"Error occurred: {error_message}")
+        
+        # Update response area with error
         self.response_output.clear()
-        self.response_output.setTextColor(Qt.GlobalColor.red)
-        self.response_output.append(f"❌ Erro: {error_message}")
+        self.response_output.setTextColor(QColor("#e53e3e"))
+        self.response_output.append(f"Erro: {error_message}")
         
-        # Update the history with the error message
+        # Find and update the temporary entry with the error message
         if self.chat_history.history:
-            # Find the most recent entry that has the processing placeholder
-            for i in range(len(self.chat_history.history) - 1, -1, -1):
-                if "⏳ Processando sua pergunta..." in self.chat_history.history[i]["answer"]:
-                    # Update this entry with the error message
-                    self.chat_history.history[i]["answer"] = f"❌ Erro: {error_message}"
-                    break
-            else:
-                # If no processing entry was found but we have history, add error to the last question
-                if self.chat_history.history:
-                    last_question = self.chat_history.history[-1]["question"]
-                    self.chat_history.add_entry(last_question, f"❌ Erro: {error_message}")
-                    
-            # Update the history view
-            self.update_history_view()
+            # Get the last entry in history (which should be our temporary entry)
+            last_entry = self.chat_history.history[-1]
+            if "⏳ Processando sua pergunta..." in last_entry["answer"]:
+                # Replace the placeholder with the error message
+                error_html = f'<span style="color: #e53e3e;">Erro: {error_message}</span>'
+                self.chat_history.history[-1]["answer"] = error_html
+                
+                # Update the history view
+                self.update_history_view()
         
-        # Update the status bar
+        # Reset UI state
+        self.ask_button.setEnabled(True)
         self.status_bar.showMessage(f"Erro: {error_message}", 5000)
 
     def load_documents(self):
@@ -1319,8 +1372,9 @@ class MainWindow(QMainWindow):
             <html>
             <head></head>
             <body>
-                <div style="text-align: center; margin-top: 30px; color: #888;">
-                    Histórico de conversas vazio.
+                <div style="text-align: center; margin-top: 40px; color: #939aab; font-size: 14px;">
+                    <div style="margin-bottom: 10px;">✨ Histórico de conversas vazio ✨</div>
+                    <div>Comece uma nova conversa fazendo uma pergunta!</div>
                 </div>
             </body>
             </html>
@@ -1338,9 +1392,9 @@ class MainWindow(QMainWindow):
         
         # Update the color based on count
         if count > 0:
-            self.chat_count_label.setStyleSheet("color: green;")
+            self.chat_count_label.setStyleSheet("color: #38a169;")
         else:
-            self.chat_count_label.setStyleSheet("color: black;")
+            self.chat_count_label.setStyleSheet("color: #515769;")
 
 class AgnoCompatibleDocument:
     """Document class compatible with agno framework's expected interface"""
@@ -1400,8 +1454,9 @@ class ChatHistory:
         """Return history formatted as HTML for display"""
         if not self.history:
             return """
-            <div style="text-align: center; margin-top: 30px; color: #888;">
-                Histórico de conversas vazio.
+            <div style="text-align: center; margin-top: 40px; color: #939aab; font-size: 14px;">
+                <div style="margin-bottom: 10px;">✨ Histórico de conversas vazio ✨</div>
+                <div>Comece uma nova conversa fazendo uma pergunta!</div>
             </div>
             """
             
