@@ -606,33 +606,7 @@ class MainWindow(QMainWindow):
         # Define a common font for buttons
         button_font = QFont("Arial", 11)
         
-        # App title and info
-        header_layout = QHBoxLayout()
-        title_label = QLabel(f"{APP_TITLE}")
-        title_label.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        title_label.setStyleSheet("color: #5c85d6; margin-bottom: 5px;")
-        header_layout.addWidget(title_label)
-        
-        # Document status
-        self.doc_status_label = QLabel("Sem documentos carregados")
-        self.doc_status_label.setStyleSheet("color: #939aab;")
-        header_layout.addWidget(self.doc_status_label, alignment=Qt.AlignmentFlag.AlignRight)
-        
-        layout.addLayout(header_layout)
-        
-        # Version label
-        version_label = QLabel(f"v{APP_VERSION}")
-        version_label.setStyleSheet("color: #939aab; font-size: 11px;")
-        version_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        layout.addWidget(version_label)
-        
-        # Separator line
-        separator = QLabel()
-        separator.setFixedHeight(1)
-        separator.setStyleSheet("background-color: #e0e4e8; margin-top: 5px; margin-bottom: 10px;")
-        layout.addWidget(separator)
-        
-        # History layout
+        # History layout - Now first section
         self.history_layout = QVBoxLayout()
         
         # Container for the scrollable history
@@ -759,6 +733,12 @@ class MainWindow(QMainWindow):
         # Add the history panel to the main layout
         layout.addLayout(self.history_layout)
         
+        # Separator line
+        separator = QLabel()
+        separator.setFixedHeight(1)
+        separator.setStyleSheet("background-color: #e0e4e8; margin-top: 5px; margin-bottom: 10px;")
+        layout.addWidget(separator)
+        
         # Question input
         question_label = QLabel("Faça sua pergunta sobre as atas:")
         question_label.setFont(QFont("Arial", 14))
@@ -824,6 +804,10 @@ class MainWindow(QMainWindow):
         """Create the status bar"""
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
+        
+        # Create document status label (but not displayed in header)
+        self.doc_status_label = QLabel("Sem documentos carregados")
+        self.doc_status_label.setStyleSheet("color: #939aab;")
         
         # Add document counter to status bar
         self.doc_count_label = QLabel("Documentos: 0")
@@ -926,10 +910,19 @@ class MainWindow(QMainWindow):
             
             # Update UI based on results
             if success:
+                # Count unique file sources in metadata instead of total chunks
+                sources = set()
+                for metadata in self.vector_db.metadatas:
+                    if "source" in metadata:
+                        sources.add(metadata["source"])
+                
+                file_count = len(sources)
+                chunk_count = len(self.vector_db.documents)
+                
                 # Document count available in persistence.document_count if loaded
-                count = self.persistence.get_document_count()
-                if count > 0:
-                    self._update_document_status(f"Documentos carregados: {count}")
+                if file_count > 0:
+                    self._update_document_status(f"{file_count} documentos carregados")
+                    self.doc_count_label.setText(f"Documentos: {file_count}")
                     self.ask_button.setEnabled(True)
                     self.refresh_button.setEnabled(True)
                 else:
@@ -951,11 +944,8 @@ class MainWindow(QMainWindow):
 
     def _update_document_status(self, text):
         """Update document status display"""
-        self.doc_status_label.setText(text)
-        if "carregados" in text.lower() or "indexados" in text.lower():
-            self.doc_status_label.setStyleSheet("color: #38a169; font-weight: bold;")
-        else:
-            self.doc_status_label.setStyleSheet("color: #939aab;")
+        # Update only the status bar message since the label is not displayed anymore
+        self.status_bar.showMessage(text, 3000)
 
     def process_question(self):
         """Process the user's question"""
@@ -1287,13 +1277,21 @@ class MainWindow(QMainWindow):
         self.ask_button.setEnabled(True)
         self.refresh_button.setEnabled(True)
         
-        # Update status
-        doc_count = len(self.vector_db.documents)
-        self._update_document_status(f"{doc_count} documentos carregados")
-        self.doc_count_label.setText(f"Documentos: {doc_count}")
+        # Count unique file sources in metadata instead of total chunks
+        sources = set()
+        for metadata in self.vector_db.metadatas:
+            if "source" in metadata:
+                sources.add(metadata["source"])
+        
+        file_count = len(sources)
+        chunk_count = len(self.vector_db.documents)
+        
+        # Update status - show file count, not chunk count
+        self._update_document_status(f"{file_count} documentos carregados")
+        self.doc_count_label.setText(f"Documentos: {file_count}")
         
         # Show success message
-        QMessageBox.information(self, "Sucesso", "Documentos carregados com sucesso!")
+        QMessageBox.information(self, "Sucesso", f"Documentos carregados com sucesso! ({file_count} arquivos, {chunk_count} fragmentos)")
         self.status_bar.showMessage("Documentos carregados com sucesso!", 5000)
         
         # Save the vector store to disk
