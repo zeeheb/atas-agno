@@ -678,7 +678,6 @@ class MainWindow(QMainWindow):
                 border-radius: 6px;
                 border-left: 4px solid #5c85d6;
                 font-size: 18px;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
             }
             .chat-entry {
                 margin-bottom: 20px;
@@ -686,7 +685,6 @@ class MainWindow(QMainWindow):
                 border: 1px solid #e0e4e8;
                 border-radius: 8px;
                 background-color: white;
-                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
             }
             .timestamp {
                 color: #939aab;
@@ -872,7 +870,6 @@ class MainWindow(QMainWindow):
                 background-color: white;
                 color: #363a43;
                 font-family: 'Segoe UI', Arial, sans-serif;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
             }
             QPushButton {
                 background-color: #5c85d6;
@@ -881,7 +878,6 @@ class MainWindow(QMainWindow):
                 padding: 10px 18px;
                 border-radius: 6px;
                 font-weight: bold;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             }
             QPushButton:hover {
                 background-color: #4a6fc3;
