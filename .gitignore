@@ -65,3 +65,4 @@ coverage.xml
 
 # Local development settings
 local_settings.py
+app_data/chat_history.json

@@ -5,9 +5,9 @@ from pathlib import Path
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QTextEdit, QPushButton, QLabel, 
                             QFileDialog, QMessageBox, QProgressDialog,
-                            QStatusBar, QSplashScreen)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt6.QtGui import QFont, QIcon, QPixmap
+                            QStatusBar, QSplashScreen, QScrollArea, QFrame)
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QDateTime
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from dotenv import load_dotenv, find_dotenv
@@ -269,7 +269,7 @@ class WorkerThread(QThread):
                 else:
                     # Join the cleaned response lines
                     response = "\n".join(response_lines)
-                    
+                
                 logger.info(f"Processed response text (length: {len(response)} characters)")
             
             if not response or len(response.strip()) < 5:
@@ -514,6 +514,9 @@ class MainWindow(QMainWindow):
         # Initialize persistence
         self.persistence = VectorStorePersistence(APP_DATA_DIR)
         
+        # Initialize chat history
+        self.chat_history = ChatHistory()
+        
         # Show splash screen during initialization
         self._show_splash_screen()
         
@@ -530,6 +533,9 @@ class MainWindow(QMainWindow):
         
         # Create status bar
         self._create_status_bar()
+        
+        # Initialize chat count
+        self._update_chat_count()
         
         # Set window style
         self._apply_styles()
@@ -597,6 +603,9 @@ class MainWindow(QMainWindow):
 
     def _create_ui_components(self, layout):
         """Create and arrange UI components"""
+        # Define a common font for buttons
+        button_font = QFont("Arial", 11)
+        
         # App title and info
         header_layout = QHBoxLayout()
         title_label = QLabel(f"{APP_TITLE}")
@@ -616,13 +625,120 @@ class MainWindow(QMainWindow):
         separator.setStyleSheet("background-color: #ccc;")
         layout.addWidget(separator)
         
+        # History layout
+        self.history_layout = QVBoxLayout()
+        
+        # Container for the scrollable history
+        history_container = QVBoxLayout()
+        
+        # Header with controls for history
+        history_header = QHBoxLayout()
+        history_title = QLabel("Histórico de Conversas")
+        history_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        history_header.addWidget(history_title)
+        
+        # Clear history button
+        self.clear_history_button = QPushButton("Limpar Histórico")
+        self.clear_history_button.setIcon(QIcon.fromTheme("edit-clear-all"))
+        self.clear_history_button.clicked.connect(self.clear_chat_history)
+        self.clear_history_button.setFont(button_font)
+        self.clear_history_button.setMinimumHeight(40)
+        history_header.addWidget(self.clear_history_button, alignment=Qt.AlignmentFlag.AlignRight)
+        
+        history_container.addLayout(history_header)
+        
+        # Scroll area for history content
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        # Container widget for history content
+        self.history_content = QTextEdit()
+        self.history_content.setReadOnly(True)
+        self.history_content.setAcceptRichText(True)
+        
+        # Configure history text rendering options
+        history_document = self.history_content.document()
+        history_document.setDefaultStyleSheet("""
+            body {
+                font-family: 'Segoe UI', Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                font-size: 14px;
+            }
+            .date-header {
+                background-color: #f2f7fd;
+                color: #2a6fc9;
+                font-weight: bold;
+                padding: 8px 12px;
+                margin: 20px 0 10px 0;
+                border-radius: 4px;
+                border-left: 4px solid #2a6fc9;
+                font-size: 16px;
+            }
+            .chat-entry {
+                margin-bottom: 20px;
+                padding: 12px;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
+                background-color: #f9f9f9;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            }
+            .timestamp {
+                color: #888;
+                font-size: 10pt;
+                margin-bottom: 8px;
+                text-align: right;
+            }
+            .question, .answer {
+                margin-bottom: 10px;
+            }
+            .q-label, .a-label {
+                font-weight: bold;
+                margin-bottom: 4px;
+                font-size: 15px;
+            }
+            .q-label {
+                color: #2a6fc9;
+            }
+            .a-label {
+                color: #1e7b34;
+            }
+            .q-content, .a-content {
+                margin-left: 10px;
+                line-height: 1.5;
+                padding: 4px 0;
+                font-size: 14px;
+            }
+            .q-content {
+                background-color: rgba(42, 111, 201, 0.05);
+                border-left: 3px solid #2a6fc9;
+                padding-left: 8px;
+            }
+            .a-content {
+                background-color: rgba(30, 123, 52, 0.05);
+                border-left: 3px solid #1e7b34;
+                padding-left: 8px;
+            }
+        """)
+        
+        scroll_area.setWidget(self.history_content)
+        history_container.addWidget(scroll_area)
+        
+        self.history_layout.addLayout(history_container)
+        
+        # Add the history panel to the main layout
+        layout.addLayout(self.history_layout)
+        
         # Question input
         question_label = QLabel("Faça sua pergunta sobre as atas:")
+        question_label.setFont(QFont("Arial", 12))
         layout.addWidget(question_label)
         
         self.question_input = QTextEdit()
         self.question_input.setPlaceholderText("Digite sua pergunta aqui...")
         self.question_input.setMaximumHeight(100)
+        self.question_input.setFont(QFont("Segoe UI", 14))
         layout.addWidget(self.question_input)
         
         # Buttons
@@ -632,11 +748,15 @@ class MainWindow(QMainWindow):
         self.ask_button.setIcon(QIcon.fromTheme("dialog-question"))
         self.ask_button.clicked.connect(self.process_question)
         self.ask_button.setEnabled(False)  # Disabled until documents are loaded
+        self.ask_button.setFont(button_font)
+        self.ask_button.setMinimumHeight(40)
         button_layout.addWidget(self.ask_button)
         
         self.load_docs_button = QPushButton("Carregar Documentos")
         self.load_docs_button.setIcon(QIcon.fromTheme("document-open"))
         self.load_docs_button.clicked.connect(self.load_documents)
+        self.load_docs_button.setFont(button_font)
+        self.load_docs_button.setMinimumHeight(40)
         button_layout.addWidget(self.load_docs_button)
         
         # Add refresh button
@@ -644,120 +764,18 @@ class MainWindow(QMainWindow):
         self.refresh_button.setIcon(QIcon.fromTheme("view-refresh"))
         self.refresh_button.clicked.connect(self.reload_documents)
         self.refresh_button.setEnabled(False)  # Disabled until documents are loaded
+        self.refresh_button.setFont(button_font)
+        self.refresh_button.setMinimumHeight(40)
         button_layout.addWidget(self.refresh_button)
         
         layout.addLayout(button_layout)
         
-        # Response area
-        response_layout = QVBoxLayout()
-        response_header = QHBoxLayout()
-        
-        response_label = QLabel("Resposta:")
-        response_header.addWidget(response_label)
-        
-        # Add a "clear" button for responses
-        self.clear_button = QPushButton("Limpar")
-        self.clear_button.setIcon(QIcon.fromTheme("edit-clear"))
-        self.clear_button.clicked.connect(lambda: self.response_output.clear())
-        response_header.addWidget(self.clear_button, alignment=Qt.AlignmentFlag.AlignRight)
-        
-        response_layout.addLayout(response_header)
-        
-        # Create the response output text edit with HTML rendering capability
+        # Hidden response output for storing responses
+        # This is needed for the backend but not shown in the UI
         self.response_output = QTextEdit()
         self.response_output.setReadOnly(True)
         self.response_output.setAcceptRichText(True)
-        
-        # Configure text rendering options
-        document = self.response_output.document()
-        document.setDefaultStyleSheet("""
-            body {
-                font-family: 'Segoe UI', Arial, sans-serif;
-                color: #333333;
-                line-height: 1.6;
-                margin: 0;
-                padding: 0;
-            }
-            p {
-                margin: 0 0 10px 0;
-            }
-            h2, h3, h4 {
-                color: #2a6fc9;
-                margin-top: 16px;
-                margin-bottom: 8px;
-            }
-            h2 {
-                font-size: 18px;
-                border-bottom: 1px solid #e0e0e0;
-                padding-bottom: 5px;
-            }
-            h3 {
-                font-size: 16px;
-            }
-            h4 {
-                font-size: 14px;
-            }
-            ul, ol {
-                margin-top: 5px;
-                margin-bottom: 10px;
-                padding-left: 20px;
-            }
-            li {
-                margin-bottom: 5px;
-            }
-            code {
-                font-family: Consolas, monospace;
-                background-color: #f5f5f5;
-                padding: 2px 4px;
-                border-radius: 3px;
-                font-size: 90%;
-            }
-            pre {
-                background-color: #f5f5f5;
-                padding: 10px;
-                border-radius: 5px;
-                overflow-x: auto;
-                margin: 10px 0;
-            }
-            blockquote {
-                border-left: 3px solid #2a6fc9;
-                padding-left: 10px;
-                margin: 10px 0;
-                color: #555;
-            }
-            a {
-                color: #2a6fc9;
-                text-decoration: none;
-            }
-            a:hover {
-                text-decoration: underline;
-            }
-            .highlight {
-                background-color: #fffde7;
-                padding: 2px;
-                border-radius: 2px;
-            }
-            table {
-                border-collapse: collapse;
-                width: 100%;
-                margin: 10px 0;
-            }
-            th, td {
-                border: 1px solid #ddd;
-                padding: 8px;
-                text-align: left;
-            }
-            th {
-                background-color: #f2f2f2;
-            }
-            tr:nth-child(even) {
-                background-color: #f9f9f9;
-            }
-        """)
-        
-        response_layout.addWidget(self.response_output)
-        
-        layout.addLayout(response_layout)
+        self.response_output.setVisible(False)
 
     def _create_status_bar(self):
         """Create the status bar"""
@@ -767,6 +785,10 @@ class MainWindow(QMainWindow):
         # Add document counter to status bar
         self.doc_count_label = QLabel("Documentos: 0")
         self.status_bar.addPermanentWidget(self.doc_count_label)
+        
+        # Add chat history counter to status bar
+        self.chat_count_label = QLabel("Conversas: 0")
+        self.status_bar.addPermanentWidget(self.chat_count_label)
         
         # Add memory usage to status bar
         self.memory_label = QLabel("Memória: 0 MB")
@@ -831,37 +853,47 @@ class MainWindow(QMainWindow):
         """)
 
     def _load_persisted_data(self):
-        """Try to load persisted vector store data on startup"""
-        # Check if we have saved data
-        doc_count = self.persistence.get_document_count()
-        
-        if doc_count > 0:
-            self.status_bar.showMessage("Carregando dados salvos...")
-            
-            # Create a small progress dialog
-            progress = QProgressDialog("Carregando documentos salvos...", None, 0, 100, self)
-            progress.setWindowModality(Qt.WindowModality.WindowModal)
-            progress.setMinimumDuration(0)
-            progress.setValue(10)
+        """Load persisted data from disk"""
+        try:
+            # Show loading status
+            self.status_bar.showMessage("Carregando dados persistidos...")
             QApplication.processEvents()
             
-            # Load data
-            if self.persistence.load_vector_store(self.vector_db):
-                progress.setValue(100)
-                self.status_bar.showMessage("Documentos carregados com sucesso!", 5000)
-                
-                # Update UI
-                self._update_document_status(f"{doc_count} documentos carregados")
-                self.ask_button.setEnabled(True)
-                self.refresh_button.setEnabled(True)
-                self.doc_count_label.setText(f"Documentos: {doc_count}")
-            else:
-                self.status_bar.showMessage("Erro ao carregar documentos salvos", 5000)
-                
-            progress.close()
-        else:
-            self.status_bar.showMessage("Bem-vindo! Carregue documentos para começar.", 5000)
+            # Load vector db from persistence
+            success = self.persistence.load_vector_store(self.vector_db)
             
+            # Load chat history
+            chat_history_file = os.path.join(APP_DATA_DIR, "chat_history.json")
+            self.chat_history.load_from_disk(chat_history_file)
+            
+            # Update chat count after loading history
+            self._update_chat_count()
+            
+            # Update UI based on results
+            if success:
+                # Document count available in persistence.document_count if loaded
+                count = self.persistence.get_document_count()
+                if count > 0:
+                    self._update_document_status(f"Documentos carregados: {count}")
+                    self.ask_button.setEnabled(True)
+                    self.refresh_button.setEnabled(True)
+                else:
+                    self._update_document_status("Nenhum documento encontrado na base de dados")
+                    self.ask_button.setEnabled(False)
+                    self.refresh_button.setEnabled(False)
+                    
+                self.status_bar.showMessage("Dados carregados com sucesso!", 3000)
+            else:
+                self._update_document_status("Nenhum documento encontrado na base de dados")
+                self.status_bar.showMessage("Nenhum dado persistido encontrado", 3000)
+                self.ask_button.setEnabled(False)
+                self.refresh_button.setEnabled(False)
+                
+        except Exception as e:
+            logger.error(f"Error loading persisted data: {str(e)}")
+            self.status_bar.showMessage("Erro ao carregar dados persistidos", 3000)
+            self._update_document_status("Erro ao carregar documentos")
+
     def _update_document_status(self, text):
         """Update document status display"""
         self.doc_status_label.setText(text)
@@ -877,8 +909,29 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Aviso", "Por favor, digite uma pergunta.")
             return
         
+        # Temporarily add the question to history with a placeholder response
+        timestamp = QDateTime.currentDateTime()
+        temp_entry = {
+            "timestamp": timestamp,
+            "question": question,
+            "answer": "⏳ Processando sua pergunta..."
+        }
+        
+        # Add temporary entry to the history
+        self.chat_history.history.append(temp_entry)
+        
+        # Update the history view with the new question immediately
+        self.update_history_view()
+        
+        # Scroll to the bottom of the history view to show the new question
+        scrollbar = self.history_content.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+        
+        # Disable ask button during processing
         self.ask_button.setEnabled(False)
         self.status_bar.showMessage("Processando pergunta...")
+        
+        # Clear and set placeholder in the response area
         self.response_output.clear()
         self.response_output.setTextColor(Qt.GlobalColor.darkGray)
         self.response_output.append("⏳ Processando sua pergunta...")
@@ -905,7 +958,21 @@ class MainWindow(QMainWindow):
             # Log response for debugging
             logger.info(f"Displaying response (length: {len(response)})")
             
-            # Clear previous content
+            # Get the user question
+            question = self.question_input.toPlainText().strip()
+            
+            # Find and update the temporary entry with the actual response
+            if self.chat_history.history and self.chat_history.history[-1]["question"] == question:
+                # Replace the placeholder with the actual response
+                self.chat_history.history[-1]["answer"] = response
+            else:
+                # If not found, add a new entry
+                self.chat_history.add_entry(question, response)
+            
+            # Update the history view in real-time
+            self.update_history_view()
+            
+            # Clear previous content in response area
             self.response_output.clear()
             
             # Convert the text to HTML with enhanced formatting
@@ -1073,9 +1140,28 @@ class MainWindow(QMainWindow):
 
     def handle_error(self, error_message):
         """Handle any errors that occur"""
+        # Update the response output with the error
         self.response_output.clear()
         self.response_output.setTextColor(Qt.GlobalColor.red)
         self.response_output.append(f"❌ Erro: {error_message}")
+        
+        # Get the question if available
+        question = self.question_input.toPlainText().strip()
+        
+        # Update the history with the error message
+        if question:
+            # Check if we have a temporary entry to update
+            if self.chat_history.history and self.chat_history.history[-1]["question"] == question:
+                # Replace the placeholder with the error message
+                self.chat_history.history[-1]["answer"] = f"❌ Erro: {error_message}"
+            else:
+                # Add a new entry with the error
+                self.chat_history.add_entry(question, f"❌ Erro: {error_message}")
+                
+            # Update the history view
+            self.update_history_view()
+        
+        # Update the status bar
         self.status_bar.showMessage(f"Erro: {error_message}", 5000)
 
     def load_documents(self):
@@ -1167,14 +1253,89 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Erro: {error_message}", 5000)
         
     def closeEvent(self, event):
-        """Handle application close event"""
-        # Save state on exit
-        if hasattr(self, 'vector_db') and len(self.vector_db.documents) > 0:
+        """Handle the window close event"""
+        # Save persistence data
+        try:
             self.status_bar.showMessage("Salvando dados...")
-            self.persistence.save_vector_store(self.vector_db)
-        
+            
+            # Save vector store
+            if hasattr(self, 'vector_db') and self.vector_db and len(self.vector_db.documents) > 0:
+                self.persistence.save_vector_store(self.vector_db)
+                
+            # Save chat history
+            if hasattr(self, 'chat_history') and self.chat_history and len(self.chat_history.history) > 0:
+                chat_history_file = os.path.join(APP_DATA_DIR, "chat_history.json")
+                self.chat_history.save_to_disk(chat_history_file)
+                
+        except Exception as e:
+            logger.error(f"Error saving data on close: {str(e)}")
+            QMessageBox.warning(self, "Erro ao salvar", f"Erro ao salvar dados: {str(e)}")
+            
         # Accept the close event
         event.accept()
+
+    def update_history_view(self):
+        """Update the history view with current chat history"""
+        # Save current scroll position
+        scrollbar = self.history_content.verticalScrollBar()
+        current_position = scrollbar.value()
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head></head>
+        <body>
+            {self.chat_history.get_formatted_history()}
+        </body>
+        </html>
+        """
+        self.history_content.setHtml(html_content)
+        
+        # Update the chat count in the status bar
+        self._update_chat_count()
+        
+        # Restore previous scroll position
+        scrollbar.setValue(current_position)
+
+    def clear_chat_history(self):
+        """Clear the chat history"""
+        confirm = QMessageBox.question(
+            self,
+            "Limpar Histórico",
+            "Tem certeza que deseja limpar todo o histórico de conversas?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if confirm == QMessageBox.StandardButton.Yes:
+            self.chat_history.clear_history()
+            self.history_content.setHtml("""
+            <!DOCTYPE html>
+            <html>
+            <head></head>
+            <body>
+                <div style="text-align: center; margin-top: 30px; color: #888;">
+                    Histórico de conversas vazio.
+                </div>
+            </body>
+            </html>
+            """)
+            
+            # Update the chat count
+            self._update_chat_count()
+            
+            self.status_bar.showMessage("Histórico limpo com sucesso", 3000)
+    
+    def _update_chat_count(self):
+        """Update the chat count label"""
+        count = len(self.chat_history.history)
+        self.chat_count_label.setText(f"Conversas: {count}")
+        
+        # Update the color based on count
+        if count > 0:
+            self.chat_count_label.setStyleSheet("color: green;")
+        else:
+            self.chat_count_label.setStyleSheet("color: black;")
 
 class AgnoCompatibleDocument:
     """Document class compatible with agno framework's expected interface"""
@@ -1201,6 +1362,135 @@ class AgnoCompatibleDocument:
         """String representation for display purposes"""
         source = self.metadata.get('source', 'Desconhecido')
         return f"Documento: {source} (Score: {self.score:.2f if self.score else 'N/A'})"
+
+class ChatHistory:
+    """Class to store and manage chat history"""
+    def __init__(self, max_entries=50):
+        self.history = []
+        self.max_entries = max_entries
+        
+    def add_entry(self, question, answer):
+        """Add a question-answer pair to history with timestamp"""
+        timestamp = QDateTime.currentDateTime()
+        entry = {
+            "timestamp": timestamp,
+            "question": question,
+            "answer": answer
+        }
+        self.history.append(entry)
+        
+        # Remove oldest entries if exceeding max_entries
+        if len(self.history) > self.max_entries:
+            self.history = self.history[-self.max_entries:]
+            
+    def get_history(self):
+        """Return the full history"""
+        return self.history
+        
+    def clear_history(self):
+        """Clear all history"""
+        self.history = []
+        
+    def get_formatted_history(self):
+        """Return history formatted as HTML for display"""
+        if not self.history:
+            return """
+            <div style="text-align: center; margin-top: 30px; color: #888;">
+                Histórico de conversas vazio.
+            </div>
+            """
+            
+        # Group entries by date
+        entries_by_date = {}
+        for entry in self.history:
+            date_str = entry["timestamp"].toString("yyyy-MM-dd")
+            if date_str not in entries_by_date:
+                entries_by_date[date_str] = []
+            entries_by_date[date_str].append(entry)
+        
+        html = ""
+        # Process entries by date, oldest first
+        for date_str in sorted(entries_by_date.keys()):
+            # Format the date as a header
+            display_date = QDateTime.fromString(date_str, "yyyy-MM-dd").toString("dd 'de' MMMM 'de' yyyy")
+            html += f"""
+            <div class="date-header">
+                {display_date}
+            </div>
+            """
+            
+            # Add all conversations for this date, oldest first
+            for entry in sorted(entries_by_date[date_str], key=lambda e: e["timestamp"]):
+                time_str = entry["timestamp"].toString("hh:mm:ss")
+                question = entry["question"].replace('\n', '<br>')
+                answer = entry["answer"].replace('\n', '<br>')
+                
+                html += f"""
+                <div class="chat-entry">
+                    <div class="timestamp">{time_str}</div>
+                    <div class="question">
+                        <div class="q-label">Pergunta:</div>
+                        <div class="q-content">{question}</div>
+                    </div>
+                    <div class="answer">
+                        <div class="a-label">Resposta:</div>
+                        <div class="a-content">{answer}</div>
+                    </div>
+                </div>
+                """
+        return html
+    
+    def save_to_disk(self, file_path):
+        """Save chat history to disk"""
+        try:
+            # Convert QDateTime objects to strings for JSON serialization
+            serializable_history = []
+            for entry in self.history:
+                serializable_entry = {
+                    "timestamp": entry["timestamp"].toString("yyyy-MM-ddThh:mm:ss"),
+                    "question": entry["question"],
+                    "answer": entry["answer"]
+                }
+                serializable_history.append(serializable_entry)
+                
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                
+            # Write to file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(serializable_history, f, ensure_ascii=False, indent=2)
+                
+            logger.info(f"Chat history saved to {file_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving chat history: {str(e)}")
+            return False
+            
+    def load_from_disk(self, file_path):
+        """Load chat history from disk"""
+        try:
+            if not os.path.exists(file_path):
+                logger.info(f"No chat history file found at {file_path}")
+                return False
+                
+            with open(file_path, 'r', encoding='utf-8') as f:
+                serialized_history = json.load(f)
+                
+            # Convert string timestamps back to QDateTime objects
+            self.history = []
+            for entry in serialized_history:
+                dt = QDateTime.fromString(entry["timestamp"], "yyyy-MM-ddThh:mm:ss")
+                self.history.append({
+                    "timestamp": dt,
+                    "question": entry["question"],
+                    "answer": entry["answer"]
+                })
+                
+            logger.info(f"Loaded {len(self.history)} chat history entries from {file_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Error loading chat history: {str(e)}")
+            return False
 
 def main():
     """Main application entry point"""
