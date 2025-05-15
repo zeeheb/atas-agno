@@ -38,6 +38,7 @@ tmp/
 *.log
 *.sqlite3
 *.db
+app_data/
 
 # Documentation
 docs/_build/
@@ -65,4 +66,4 @@ coverage.xml
 
 # Local development settings
 local_settings.py
-app_data/chat_history.json
+
