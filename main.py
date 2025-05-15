@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QFileDialog, QMessageBox, QProgressDialog,
                             QStatusBar, QSplashScreen, QScrollArea, QFrame,
                             QStackedWidget)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QDateTime
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QDateTime, QSize
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor, QPainter
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
@@ -765,27 +765,33 @@ class MainWindow(QMainWindow):
         # Add stretch to push buttons to the right
         history_header.addStretch()
         
-        # Clear history button
-        self.clear_history_button = QPushButton("Limpar Histórico")
-        self.clear_history_button.setIcon(QIcon.fromTheme("edit-clear-all"))
+        # Clear history button with red X emoji
+        self.clear_history_button = QPushButton("❌  Limpar Chat")  # Red X emoji
+        self.clear_history_button.setToolTip("Limpar Histórico")
         self.clear_history_button.clicked.connect(self.clear_chat_history)
-        self.clear_history_button.setFont(button_font)
-        self.clear_history_button.setMinimumHeight(40)
+        self.clear_history_button.setFixedSize(160, 32)  # Increased width from 140 to 160
+        self.clear_history_button.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        
         self.clear_history_button.setStyleSheet("""
             QPushButton {
-                background-color: #f0f2f5;
-                color: #515769;
-                border: 1px solid #e0e4e8;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: bold;
+                background-color: #ffeded;
+                color: #e53e3e;
+                border: 1px solid #e53e3e;
+                border-radius: 4px;
+                padding: 4px 12px;
+                margin: 2px;
+                text-align: center;
+                qproperty-alignment: AlignCenter;
             }
             QPushButton:hover {
-                background-color: #e9ecf2;
-                color: #e53e3e;
+                background-color: #ffe0e0;
+                border: 1px solid #c53030;
+                color: #c53030;
             }
             QPushButton:pressed {
-                background-color: #e0e4e8;
+                background-color: #ffd0d0;
+                border: 1px solid #9b2c2c;
+                color: #9b2c2c;
             }
         """)
         history_header.addWidget(self.clear_history_button)
@@ -1465,6 +1471,7 @@ class MainWindow(QMainWindow):
         self._update_document_status("Erro ao carregar documentos")
         QMessageBox.critical(self, "Erro", f"Erro ao carregar documentos: {error_message}")
         self.status_bar.showMessage(f"Erro: {error_message}", 5000)
+        
         
     def closeEvent(self, event):
         """Handle the window close event"""
