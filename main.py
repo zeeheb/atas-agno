@@ -542,6 +542,9 @@ class MainWindow(QMainWindow):
         
         # Try to load persisted data
         QTimer.singleShot(100, self._load_persisted_data)
+        
+        # Ensure chat history is displayed
+        QTimer.singleShot(200, self.update_history_view)
 
     def _show_splash_screen(self):
         """Show a splash screen during app initialization"""
@@ -723,6 +726,20 @@ class MainWindow(QMainWindow):
                 padding-left: 12px;
                 border-radius: 0 4px 4px 0;
             }
+        """)
+        
+        # Set initial empty state
+        self.history_content.setHtml("""
+        <!DOCTYPE html>
+        <html>
+        <head></head>
+        <body>
+            <div style="text-align: center; margin-top: 40px; color: #939aab; font-size: 14px;">
+                <div style="margin-bottom: 10px;">✨ Histórico de conversas vazio ✨</div>
+                <div>Comece uma nova conversa fazendo uma pergunta!</div>
+            </div>
+        </body>
+        </html>
         """)
         
         scroll_area.setWidget(self.history_content)
@@ -907,6 +924,9 @@ class MainWindow(QMainWindow):
             
             # Update chat count after loading history
             self._update_chat_count()
+            
+            # Explicitly update history view to ensure it shows
+            self.update_history_view()
             
             # Update UI based on results
             if success:
@@ -1336,12 +1356,18 @@ class MainWindow(QMainWindow):
         scrollbar = self.history_content.verticalScrollBar()
         current_position = scrollbar.value()
         
+        # Clear current content first
+        self.history_content.clear()
+        
+        # Get formatted history
+        formatted_history = self.chat_history.get_formatted_history()
+        
         html_content = f"""
         <!DOCTYPE html>
         <html>
         <head></head>
         <body>
-            {self.chat_history.get_formatted_history()}
+            {formatted_history}
         </body>
         </html>
         """
@@ -1364,7 +1390,20 @@ class MainWindow(QMainWindow):
         )
         
         if confirm == QMessageBox.StandardButton.Yes:
+            # Clear the history object
             self.chat_history.clear_history()
+            
+            # Remove history file from disk if it exists
+            chat_history_file = os.path.join(APP_DATA_DIR, "chat_history.json")
+            try:
+                if os.path.exists(chat_history_file):
+                    os.remove(chat_history_file)
+                    logger.info(f"Removed chat history file: {chat_history_file}")
+            except Exception as e:
+                logger.error(f"Error removing chat history file: {str(e)}")
+            
+            # Set empty state HTML to history content
+            self.history_content.clear()
             self.history_content.setHtml("""
             <!DOCTYPE html>
             <html>
@@ -1377,6 +1416,9 @@ class MainWindow(QMainWindow):
             </body>
             </html>
             """)
+            
+            # Force garbage collection
+            gc.collect()
             
             # Update the chat count
             self._update_chat_count()
@@ -1446,7 +1488,11 @@ class ChatHistory:
         
     def clear_history(self):
         """Clear all history"""
+        # Clear the history list completely
         self.history = []
+        
+        # Explicitly request garbage collection
+        gc.collect()
         
     def get_formatted_history(self):
         """Return history formatted as HTML for display"""
