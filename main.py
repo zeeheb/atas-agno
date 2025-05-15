@@ -5,9 +5,10 @@ from pathlib import Path
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QTextEdit, QPushButton, QLabel, 
                             QFileDialog, QMessageBox, QProgressDialog,
-                            QStatusBar, QSplashScreen, QScrollArea, QFrame)
+                            QStatusBar, QSplashScreen, QScrollArea, QFrame,
+                            QStackedWidget)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QDateTime
-from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor, QPainter
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from dotenv import load_dotenv, find_dotenv
@@ -505,11 +506,125 @@ class DocumentLoaderThread(QThread):
     def stop(self):
         self.is_running = False
 
+class SettingsView(QWidget):
+    """Settings view for the application"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent = parent
+        self.initUI()
+        
+    def initUI(self):
+        """Initialize the UI components"""
+        layout = QVBoxLayout(self)
+        
+        # Header with title and back button
+        header_layout = QHBoxLayout()
+        
+        # Back button
+        self.back_button = QPushButton("Voltar")
+        self.back_button.setIcon(QIcon.fromTheme("go-previous"))
+        self.back_button.clicked.connect(self.go_back)
+        self.back_button.setFont(QFont("Arial", 11))
+        self.back_button.setMinimumHeight(40)
+        # Remove fixed width to show text properly
+        self.back_button.setStyleSheet("""
+            QPushButton {
+                background-color: #f0f2f5;
+                color: #515769;
+                border: 1px solid #e0e4e8;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e9ecf2;
+            }
+            QPushButton:pressed {
+                background-color: #e0e4e8;
+            }
+        """)
+        header_layout.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        
+        # Title
+        settings_title = QLabel("Configurações")
+        settings_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        settings_title.setStyleSheet("color: #4a6fc3; margin-bottom: 5px;")
+        header_layout.addWidget(settings_title, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        # Add empty widget for spacing
+        header_layout.addStretch()
+        
+        layout.addLayout(header_layout)
+        
+        # Separator line
+        separator = QLabel()
+        separator.setFixedHeight(1)
+        separator.setStyleSheet("background-color: #e0e4e8; margin-top: 5px; margin-bottom: 20px;")
+        layout.addWidget(separator)
+        
+        # Settings content with placeholders for future development
+        settings_content = QVBoxLayout()
+        
+        # Section: API Configuration
+        api_section = QVBoxLayout()
+        api_title = QLabel("Configuração de API")
+        api_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        api_title.setStyleSheet("color: #515769; margin-bottom: 10px;")
+        api_section.addWidget(api_title)
+        
+        api_info = QLabel("Estas configurações serão implementadas em versões futuras.")
+        api_info.setStyleSheet("color: #939aab; margin-bottom: 20px;")
+        api_section.addWidget(api_info)
+        
+        settings_content.addLayout(api_section)
+        
+        # Section: Document Processing
+        doc_section = QVBoxLayout()
+        doc_title = QLabel("Processamento de Documentos")
+        doc_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        doc_title.setStyleSheet("color: #515769; margin-bottom: 10px;")
+        doc_section.addWidget(doc_title)
+        
+        doc_info = QLabel("Opções para ajustar como os documentos são processados e armazenados.")
+        doc_info.setStyleSheet("color: #939aab; margin-bottom: 20px;")
+        doc_section.addWidget(doc_info)
+        
+        settings_content.addLayout(doc_section)
+        
+        # Section: Application Settings
+        app_section = QVBoxLayout()
+        app_title = QLabel("Configurações do Aplicativo")
+        app_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        app_title.setStyleSheet("color: #515769; margin-bottom: 10px;")
+        app_section.addWidget(app_title)
+        
+        app_info = QLabel("Opções para personalizar a aparência e comportamento do aplicativo.")
+        app_info.setStyleSheet("color: #939aab; margin-bottom: 20px;")
+        app_section.addWidget(app_info)
+        
+        app_version = QLabel(f"Versão do Aplicativo: {APP_VERSION}")
+        app_version.setStyleSheet("color: #515769; font-weight: bold;")
+        app_section.addWidget(app_version)
+        
+        settings_content.addLayout(app_section)
+        
+        layout.addLayout(settings_content)
+        
+        # Add stretching space at the bottom
+        layout.addStretch()
+        
+    def go_back(self):
+        """Return to the main view"""
+        if self.parent and hasattr(self.parent, 'stacked_widget'):
+            # Switch to main view (index 0)
+            self.parent.stacked_widget.setCurrentIndex(0)
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"{APP_TITLE} - v{APP_VERSION}")
-        self.setMinimumSize(1000, 700)
+        self.setWindowTitle(f"{APP_TITLE} v{APP_VERSION}")
+        self.resize(900, 700)
         
         # Initialize persistence
         self.persistence = VectorStorePersistence(APP_DATA_DIR)
@@ -520,31 +635,56 @@ class MainWindow(QMainWindow):
         # Show splash screen during initialization
         self._show_splash_screen()
         
-        # Initialize the AI components
-        self._init_ai_components()
+        # Setup stacked widget to hold main view and settings view
+        self.stacked_widget = QStackedWidget()
+        self.setCentralWidget(self.stacked_widget)
         
-        # Create the main widget and layout
-        main_widget = QWidget()
-        self.setCentralWidget(main_widget)
-        layout = QVBoxLayout(main_widget)
+        # Create main content widget
+        self.main_widget = QWidget()
+        main_layout = QVBoxLayout(self.main_widget)
+        main_layout.setContentsMargins(20, 20, 20, 20)
         
-        # Create the UI components
-        self._create_ui_components(layout)
+        # Create settings view
+        self.settings_view = SettingsView(self)
         
-        # Create status bar
-        self._create_status_bar()
+        # Add both widgets to the stacked widget
+        self.stacked_widget.addWidget(self.main_widget)
+        self.stacked_widget.addWidget(self.settings_view)
         
-        # Initialize chat count
-        self._update_chat_count()
+        # Set main view as default
+        self.stacked_widget.setCurrentIndex(0)
         
-        # Set window style
-        self._apply_styles()
-        
-        # Try to load persisted data
-        QTimer.singleShot(100, self._load_persisted_data)
-        
-        # Ensure chat history is displayed
-        QTimer.singleShot(200, self.update_history_view)
+        try:
+            # Initialize AI components
+            self._init_ai_components()
+            
+            # Create UI components
+            self._create_ui_components(main_layout)
+            
+            # Create status bar
+            self._create_status_bar()
+            
+            # Initialize chat count
+            self._update_chat_count()
+            
+            # Apply styles
+            self._apply_styles()
+            
+            # Load persisted data
+            self._load_persisted_data()
+            
+            # Ensure chat history is displayed
+            QTimer.singleShot(200, self.update_history_view)
+            
+        except Exception as e:
+            logger.error(f"Error initializing components: {str(e)}")
+            
+            # Hide splash screen if error
+            if hasattr(self, 'splash'):
+                self.splash.finish(self)
+            QMessageBox.critical(self, "Erro de Inicialização", 
+                              f"Erro ao inicializar componentes: {str(e)}\n"
+                              "Verifique se o arquivo .env está configurado corretamente.")
 
     def _show_splash_screen(self):
         """Show a splash screen during app initialization"""
@@ -622,6 +762,9 @@ class MainWindow(QMainWindow):
         history_title.setStyleSheet("color: #4a6fc3; margin-bottom: 5px;")
         history_header.addWidget(history_title)
         
+        # Add stretch to push buttons to the right
+        history_header.addStretch()
+        
         # Clear history button
         self.clear_history_button = QPushButton("Limpar Histórico")
         self.clear_history_button.setIcon(QIcon.fromTheme("edit-clear-all"))
@@ -645,7 +788,37 @@ class MainWindow(QMainWindow):
                 background-color: #e0e4e8;
             }
         """)
-        history_header.addWidget(self.clear_history_button, alignment=Qt.AlignmentFlag.AlignRight)
+        history_header.addWidget(self.clear_history_button)
+        
+        # Settings button with icon
+        self.settings_button = QPushButton()
+        self.settings_button.setToolTip("Configurações")
+        self.settings_button.clicked.connect(self.show_settings)
+        # Set fixed size for a smaller button
+        self.settings_button.setFixedSize(30, 30)
+        # Direct use of icon character in button text
+        self.settings_button.setText("⚙")
+        # Set smaller font size for better proportions
+        self.settings_button.setFont(QFont("Arial", 13))
+        # Make icon centered in button
+        self.settings_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #5c85d6;
+                border: none;
+                padding: 0;
+                margin: 2px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                color: #4a6fc3;
+                background-color: rgba(92, 133, 214, 0.1);
+            }
+            QPushButton:pressed {
+                color: #3a5fb3;
+            }
+        """)
+        history_header.addWidget(self.settings_button)
         
         history_container.addLayout(history_header)
         
@@ -740,6 +913,7 @@ class MainWindow(QMainWindow):
         </html>
         """)
         
+        # Add to scroll area
         scroll_area.setWidget(self.history_content)
         history_container.addWidget(scroll_area)
         
@@ -1399,6 +1573,10 @@ class MainWindow(QMainWindow):
             self.chat_count_label.setStyleSheet("color: #38a169;")
         else:
             self.chat_count_label.setStyleSheet("color: #515769;")
+
+    def show_settings(self):
+        """Show the settings view"""
+        self.stacked_widget.setCurrentIndex(1)
 
 class AgnoCompatibleDocument:
     """Document class compatible with agno framework's expected interface"""
