@@ -942,6 +942,9 @@ class MainWindow(QMainWindow):
         self.worker.error_occurred.connect(self.handle_error)
         self.worker.finished.connect(lambda: self._on_question_finished())
         self.worker.start()
+        
+        # Clear the question input text
+        self.question_input.setPlainText("")
 
     def _on_question_finished(self):
         """Handle question processing completion"""
@@ -958,16 +961,17 @@ class MainWindow(QMainWindow):
             # Log response for debugging
             logger.info(f"Displaying response (length: {len(response)})")
             
-            # Get the user question
-            question = self.question_input.toPlainText().strip()
-            
             # Find and update the temporary entry with the actual response
-            if self.chat_history.history and self.chat_history.history[-1]["question"] == question:
-                # Replace the placeholder with the actual response
-                self.chat_history.history[-1]["answer"] = response
-            else:
-                # If not found, add a new entry
-                self.chat_history.add_entry(question, response)
+            if self.chat_history.history:
+                # Get the last entry in history (which should be our temporary entry)
+                last_entry = self.chat_history.history[-1]
+                if "⏳ Processando sua pergunta..." in last_entry["answer"]:
+                    # Replace the placeholder with the actual response
+                    self.chat_history.history[-1]["answer"] = response
+                else:
+                    # If not found with placeholder, use the question from last entry
+                    question = last_entry["question"]
+                    self.chat_history.add_entry(question, response)
             
             # Update the history view in real-time
             self.update_history_view()
@@ -1145,19 +1149,20 @@ class MainWindow(QMainWindow):
         self.response_output.setTextColor(Qt.GlobalColor.red)
         self.response_output.append(f"❌ Erro: {error_message}")
         
-        # Get the question if available
-        question = self.question_input.toPlainText().strip()
-        
         # Update the history with the error message
-        if question:
-            # Check if we have a temporary entry to update
-            if self.chat_history.history and self.chat_history.history[-1]["question"] == question:
-                # Replace the placeholder with the error message
-                self.chat_history.history[-1]["answer"] = f"❌ Erro: {error_message}"
+        if self.chat_history.history:
+            # Find the most recent entry that has the processing placeholder
+            for i in range(len(self.chat_history.history) - 1, -1, -1):
+                if "⏳ Processando sua pergunta..." in self.chat_history.history[i]["answer"]:
+                    # Update this entry with the error message
+                    self.chat_history.history[i]["answer"] = f"❌ Erro: {error_message}"
+                    break
             else:
-                # Add a new entry with the error
-                self.chat_history.add_entry(question, f"❌ Erro: {error_message}")
-                
+                # If no processing entry was found but we have history, add error to the last question
+                if self.chat_history.history:
+                    last_question = self.chat_history.history[-1]["question"]
+                    self.chat_history.add_entry(last_question, f"❌ Erro: {error_message}")
+                    
             # Update the history view
             self.update_history_view()
         
