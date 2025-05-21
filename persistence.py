@@ -143,3 +143,31 @@ class VectorStorePersistence:
         except Exception as e:
             logger.error(f"Error getting document count: {str(e)}")
             return 0 
+            
+    def reset_vector_store(self) -> bool:
+        """
+        Delete all vector store data files
+        
+        Returns:
+            bool: True if successful or files don't exist, False if error
+        """
+        try:
+            # Delete vectors file if it exists
+            if self.vectors_file.exists():
+                self.vectors_file.unlink()
+                logger.info(f"Deleted vectors file: {self.vectors_file}")
+            
+            # Delete documents file if it exists
+            if self.documents_file.exists():
+                self.documents_file.unlink()
+                logger.info(f"Deleted documents file: {self.documents_file}")
+                
+            # Delete metadata file if it exists
+            if self.metadata_file.exists():
+                self.metadata_file.unlink()
+                logger.info(f"Deleted metadata file: {self.metadata_file}")
+                
+            return True
+        except Exception as e:
+            logger.error(f"Error resetting vector store: {str(e)}")
+            return False 

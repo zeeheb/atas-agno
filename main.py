@@ -533,16 +533,24 @@ class SettingsView(QWidget):
         """Initialize the UI components"""
         layout = QVBoxLayout(self)
         
-        # Header with title and back button
+        # Header with title on left and back button on right
         header_layout = QHBoxLayout()
         
-        # Back button
+        # Title on left
+        settings_title = QLabel("Configurações")
+        settings_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        settings_title.setStyleSheet("color: #4a6fc3; margin-bottom: 5px;")
+        header_layout.addWidget(settings_title, alignment=Qt.AlignmentFlag.AlignLeft)
+        
+        # Add stretching space to push button to the right
+        header_layout.addStretch()
+        
+        # Back button on right
         self.back_button = QPushButton("Voltar")
         self.back_button.setIcon(QIcon.fromTheme("go-previous"))
         self.back_button.clicked.connect(self.go_back)
         self.back_button.setFont(QFont("Segoe UI", 11))
         self.back_button.setMinimumHeight(40)
-        # Remove fixed width to show text properly
         self.back_button.setStyleSheet("""
             QPushButton {
                 background-color: #f0f2f5;
@@ -559,16 +567,7 @@ class SettingsView(QWidget):
                 background-color: #e0e4e8;
             }
         """)
-        header_layout.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignLeft)
-        
-        # Title
-        settings_title = QLabel("Configurações")
-        settings_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        settings_title.setStyleSheet("color: #4a6fc3; margin-bottom: 5px;")
-        header_layout.addWidget(settings_title, alignment=Qt.AlignmentFlag.AlignCenter)
-        
-        # Add empty widget for spacing
-        header_layout.addStretch()
+        header_layout.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignRight)
         
         layout.addLayout(header_layout)
         
@@ -582,81 +581,87 @@ class SettingsView(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Make scroll area take full height
+        scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
         # Create a container widget for the scroll area
         settings_container = QWidget()
         settings_container.setStyleSheet("background-color: white;")
         settings_content_layout = QVBoxLayout(settings_container)
         
-        # Settings content with placeholders for future development
+        # Add Reset Data section
+        reset_section = QVBoxLayout()
+        reset_title = QLabel("Resetar Dados")
+        reset_title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
+        reset_title.setStyleSheet("color: #515769; margin-bottom: 15px; margin-top: 15px;")
+        reset_section.addWidget(reset_title)
         
-        # Section: API Configuration
-        api_section = QVBoxLayout()
-        api_title = QLabel("Configuração de API")
-        api_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        api_title.setStyleSheet("color: #515769; margin-bottom: 10px;")
-        api_section.addWidget(api_title)
+        reset_info = QLabel("Reset completo da base de documentos. Esta ação não pode ser desfeita.")
+        reset_info.setFont(QFont("Segoe UI", 12))
+        reset_info.setStyleSheet("color: #505050; margin-bottom: 30px;")
+        reset_info.setWordWrap(True)
+        reset_section.addWidget(reset_info)
         
-        api_info = QLabel("Estas configurações serão implementadas em versões futuras.")
-        api_info.setStyleSheet("color: #939aab; margin-bottom: 20px;")
-        api_section.addWidget(api_info)
+        # Reset button (full width)
+        self.reset_docs_button = QPushButton("Resetar Documentos")
+        self.reset_docs_button.setIcon(QIcon.fromTheme("edit-delete"))
+        self.reset_docs_button.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self.reset_docs_button.setMinimumHeight(50)
+        # Remove maximum width to allow full width
+        # Make the button responsive to resizing
+        self.reset_docs_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        # Use a distinct style for the reset button to indicate danger
+        self.reset_docs_button.setStyleSheet("""
+            QPushButton {
+                background-color: #f56565;
+                color: white;
+                border: none;
+                padding: 10px 18px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
+            }
+            QPushButton:hover {
+                background-color: #e53e3e;
+            }
+            QPushButton:pressed {
+                background-color: #c53030;
+            }
+            QPushButton:disabled {
+                background-color: #feb2b2;
+                color: #ffffff;
+            }
+        """)
         
-        settings_content_layout.addLayout(api_section)
+        # Connect to the parent's reset_documents method
+        if self.parent and hasattr(self.parent, 'reset_documents'):
+            self.reset_docs_button.clicked.connect(self.parent.reset_documents)
+        else:
+            self.reset_docs_button.setEnabled(False)
+            logger.warning("Parent doesn't have reset_documents method, reset button disabled")
+            
+        # Add button directly to layout for full width
+        reset_section.addWidget(self.reset_docs_button)
         
-        # Section: Document Processing
-        doc_section = QVBoxLayout()
-        doc_title = QLabel("Processamento de Documentos")
-        doc_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        doc_title.setStyleSheet("color: #515769; margin-bottom: 10px;")
-        doc_section.addWidget(doc_title)
+        settings_content_layout.addLayout(reset_section)
         
-        doc_info = QLabel("Opções para ajustar como os documentos são processados e armazenados.")
-        doc_info.setStyleSheet("color: #939aab; margin-bottom: 20px;")
-        doc_section.addWidget(doc_info)
+        # Version information at the bottom
+        version_layout = QHBoxLayout()
+        app_version = QLabel(f"Versão: {APP_VERSION}")
+        app_version.setStyleSheet("color: #939aab; font-size: 10px;")
+        version_layout.addStretch()
+        version_layout.addWidget(app_version)
+        version_layout.addStretch()
         
-        settings_content_layout.addLayout(doc_section)
-        
-        # Section: Application Settings
-        app_section = QVBoxLayout()
-        app_title = QLabel("Configurações do Aplicativo")
-        app_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        app_title.setStyleSheet("color: #515769; margin-bottom: 10px;")
-        app_section.addWidget(app_title)
-        
-        app_info = QLabel("Opções para personalizar a aparência e comportamento do aplicativo.")
-        app_info.setStyleSheet("color: #939aab; margin-bottom: 20px;")
-        app_section.addWidget(app_info)
-        
-        app_version = QLabel(f"Versão do Aplicativo: {APP_VERSION}")
-        app_version.setStyleSheet("color: #515769; font-weight: bold;")
-        app_section.addWidget(app_version)
-        
-        settings_content_layout.addLayout(app_section)
-        
-        # Add responsive UI size section
-        ui_section = QVBoxLayout()
-        ui_title = QLabel("Tamanho da Interface")
-        ui_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        ui_title.setStyleSheet("color: #515769; margin-bottom: 10px;")
-        ui_section.addWidget(ui_title)
-        
-        ui_info = QLabel("O aplicativo agora adapta-se automaticamente a telas menores.")
-        ui_info.setStyleSheet("color: #939aab; margin-bottom: 20px;")
-        ui_section.addWidget(ui_info)
-        
-        settings_content_layout.addLayout(ui_section)
-        
-        # Add stretching space at the bottom
+        # Add stretching space before version
         settings_content_layout.addStretch()
+        settings_content_layout.addLayout(version_layout)
         
         # Set the container widget as the scroll area's widget
         scroll_area.setWidget(settings_container)
         
         # Add the scroll area to the main layout
         layout.addWidget(scroll_area)
-        
-        # Add stretching space at the bottom
-        layout.addStretch()
         
     def go_back(self):
         """Return to the main view"""
@@ -1614,36 +1619,94 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Erro: {error_message}", 5000)
 
     def load_documents(self):
-        """Load documents from the selected folder"""
-        if not hasattr(self, 'docs_folder'):
-            QMessageBox.warning(self, "Aviso", "Por favor, selecione uma pasta de documentos primeiro.")
-            return
-
-        # Create progress dialog
-        self.progress_dialog = QProgressDialog("Processando documentos...", "Cancelar", 0, 100, self)
-        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progress_dialog.setWindowTitle("Processando Documentos")
-        self.progress_dialog.setMinimumDuration(0)
-        self.progress_dialog.setAutoClose(True)
-        self.progress_dialog.setAutoReset(True)
-        
-        # Create and start document loader thread
-        self.loader_thread = DocumentLoaderThread(self.vector_db, self.persistence)
-        self.loader_thread.progress.connect(self.progress_dialog.setValue)
-        self.loader_thread.finished.connect(self._on_documents_loaded)
-        self.loader_thread.error.connect(self._on_document_load_error)
-        self.loader_thread.file_processed.connect(self._update_document_status)
-        self.loader_thread.memory_warning.connect(self._show_memory_warning)
-        self.loader_thread.status_update.connect(self.progress_dialog.setLabelText)
-        
-        # Set the folder path for processing
-        self.loader_thread.set_folder_path(self.docs_folder)
-        
-        # Start processing
-        self.loader_thread.start()
-        
-        # Connect cancel button
-        self.progress_dialog.canceled.connect(self.loader_thread.stop)
+        """Load documents from a selected folder"""
+        try:
+            # First let the user select a documents folder, just like in the initial setup
+            folder = QFileDialog.getExistingDirectory(
+                self,
+                "Selecionar Pasta de Documentos",
+                "",
+                QFileDialog.Option.ShowDirsOnly
+            )
+            
+            if not folder:
+                # User canceled the folder selection
+                return
+                
+            # Reset documents before processing the new folder
+            logger.info("Resetting existing documents before processing new folder")
+            
+            # Clear the vector store in memory without confirmation dialog
+            self.vector_db.documents = []
+            self.vector_db.vectors = []
+            self.vector_db.metadatas = []
+            self.vector_db.ids = []
+            
+            # Delete the vector store files
+            if hasattr(self, 'persistence') and self.persistence:
+                self.persistence.reset_vector_store()
+                logger.info("Vector store files deleted successfully")
+            
+            # Clear the chat history
+            self.chat_history.clear_history()
+            
+            # Remove history file from disk if it exists
+            chat_history_file = os.path.join(APP_DATA_DIR, "chat_history.json")
+            try:
+                if os.path.exists(chat_history_file):
+                    os.remove(chat_history_file)
+                    logger.info(f"Removed chat history file: {chat_history_file}")
+            except Exception as e:
+                logger.error(f"Error removing chat history file: {str(e)}")
+            
+            # Update the history view
+            self.update_history_view()
+            
+            # Force garbage collection
+            gc.collect()
+                
+            # Store the selected folder path
+            self.docs_folder = folder
+            
+            # Disable buttons during processing
+            self.ask_button.setEnabled(False)
+            self.load_docs_button.setEnabled(False)
+            
+            # Update status
+            self.status_bar.showMessage("Iniciando processamento dos documentos...")
+            
+            # Create progress dialog
+            self.progress_dialog = QProgressDialog("Processando documentos...", "Cancelar", 0, 100, self)
+            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progress_dialog.setWindowTitle("Processando Documentos")
+            self.progress_dialog.setMinimumDuration(0)
+            self.progress_dialog.setAutoClose(True)
+            self.progress_dialog.setAutoReset(True)
+            
+            # Create and start document loader thread
+            self.loader_thread = DocumentLoaderThread(self.vector_db, self.persistence)
+            self.loader_thread.progress.connect(self.progress_dialog.setValue)
+            self.loader_thread.finished.connect(self._on_documents_loaded)
+            self.loader_thread.error.connect(self._on_document_load_error)
+            self.loader_thread.file_processed.connect(self._update_document_status)
+            self.loader_thread.memory_warning.connect(self._show_memory_warning)
+            self.loader_thread.status_update.connect(self.progress_dialog.setLabelText)
+            
+            # Set the folder path for processing
+            self.loader_thread.set_folder_path(self.docs_folder)
+            
+            # Start processing
+            self.loader_thread.start()
+            
+            # Connect cancel button
+            self.progress_dialog.canceled.connect(self.loader_thread.stop)
+            
+        except Exception as e:
+            logger.error(f"Error loading documents: {str(e)}")
+            QMessageBox.critical(self, "Erro", f"Erro ao carregar documentos: {str(e)}")
+            self.status_bar.showMessage("Erro ao carregar documentos", 5000)
+            self.ask_button.setEnabled(True)
+            self.load_docs_button.setEnabled(True)
 
     def _show_memory_warning(self, message):
         """Show memory warning message"""
@@ -1825,6 +1888,78 @@ class MainWindow(QMainWindow):
             self.ask_button.setEnabled(True)
             self.question_input.setEnabled(True)
             self.question_input.setPlaceholderText("Digite sua pergunta sobre os documentos aqui...")
+
+    def reset_documents(self):
+        """Reset the document store"""
+        confirm = QMessageBox.question(
+            self,
+            "Resetar Documentos",
+            "Tem certeza que deseja resetar todos os documentos carregados?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if confirm == QMessageBox.StandardButton.Yes:
+            try:
+                # First, delete the vector store files
+                if self.persistence.reset_vector_store():
+                    logger.info("Vector store files deleted successfully")
+                else:
+                    logger.warning("Failed to delete some vector store files")
+                
+                # Clear the vector store in memory
+                self.vector_db.documents = []
+                self.vector_db.vectors = []
+                self.vector_db.metadatas = []
+                self.vector_db.ids = []
+                
+                # Clear the chat history
+                self.chat_history.clear_history()
+                
+                # Remove history file from disk if it exists
+                chat_history_file = os.path.join(APP_DATA_DIR, "chat_history.json")
+                try:
+                    if os.path.exists(chat_history_file):
+                        os.remove(chat_history_file)
+                        logger.info(f"Removed chat history file: {chat_history_file}")
+                except Exception as e:
+                    logger.error(f"Error removing chat history file: {str(e)}")
+                
+                # Set empty state HTML to history content
+                self.history_content.clear()
+                self.history_content.setHtml("""
+                <!DOCTYPE html>
+                <html>
+                <head></head>
+                <body>
+                    <div style="text-align: center; margin-top: 40px; color: #939aab; font-size: 14px;">
+                        <div style="margin-bottom: 10px;">✨ Histórico de conversas vazio ✨</div>
+                        <div>Comece uma nova conversa fazendo uma pergunta!</div>
+                    </div>
+                </body>
+                </html>
+                """)
+                
+                # Update UI elements
+                self.ask_button.setEnabled(False)
+                self.question_input.setEnabled(False)
+                self.question_input.setPlaceholderText("Carregue documentos para começar...")
+                self.doc_count_label.setText("Documentos: 0")
+                
+                # Force garbage collection
+                gc.collect()
+                
+                # Update the chat count
+                self._update_chat_count()
+                
+                # Show success message
+                self.status_bar.showMessage("Documentos resetados com sucesso", 3000)
+                QMessageBox.information(self, "Sucesso", "Todos os documentos foram resetados com sucesso.")
+            
+            except Exception as e:
+                logger.error(f"Error during document reset: {str(e)}")
+                QMessageBox.critical(self, "Erro", f"Erro ao resetar documentos: {str(e)}")
+                self.status_bar.showMessage(f"Erro ao resetar documentos: {str(e)}", 5000)
 
 class AgnoCompatibleDocument:
     """Document class compatible with agno framework's expected interface"""
