@@ -314,20 +314,123 @@ class DocumentLoaderThread(QThread):
     error = pyqtSignal(str)
     file_processed = pyqtSignal(str)
     memory_warning = pyqtSignal(str)
-    status_update = pyqtSignal(str)  # New signal for status updates
+    status_update = pyqtSignal(str)
 
-    def __init__(self, vector_db):
+    def __init__(self, vector_db, persistence=None):
         super().__init__()
         self.vector_db = vector_db
-        self.is_running = True
-        self.memory_threshold = 1000  # MB
-        self.docs_dir = Path('docs')
-        self.file_extensions = {
-            'pdf': self.extract_text_from_pdf,
-            'txt': self.extract_text_from_txt,
-            'docx': None,  # Not implemented yet
-            'doc': None     # Not implemented yet
-        }
+        self.persistence = persistence
+        self.folder_path = None
+        self._stop_requested = False
+
+    def set_folder_path(self, path):
+        """Set the folder path for document processing"""
+        self.folder_path = path
+
+    def stop(self):
+        """Request the thread to stop"""
+        self._stop_requested = True
+
+    def run(self):
+        """Process documents from the selected folder"""
+        if not self.folder_path:
+            self.error.emit("Nenhuma pasta selecionada")
+            return
+
+        try:
+            # Get all PDF and TXT files in the folder
+            files = []
+            for ext in ['*.pdf', '*.txt']:
+                files.extend(Path(self.folder_path).glob(ext))
+            
+            if not files:
+                self.error.emit("Nenhum documento encontrado na pasta selecionada")
+                return
+
+            total_files = len(files)
+            processed_files = 0
+
+            # Clear existing documents before processing new ones
+            self.vector_db.documents = []
+            self.vector_db.vectors = []
+            self.vector_db.metadatas = []
+            self.vector_db.ids = []
+
+            for file_path in files:
+                if self._stop_requested:
+                    break
+
+                try:
+                    self.status_update.emit(f"Processando {file_path.name}...")
+                    
+                    # Extract text based on file type
+                    if file_path.suffix.lower() == '.pdf':
+                        text = self.extract_text_from_pdf(str(file_path))
+                    else:  # .txt
+                        text = self.extract_text_from_txt(str(file_path))
+
+                    if not text:
+                        self.status_update.emit(f"Aviso: Nenhum texto extraído de {file_path.name}")
+                        continue
+
+                    # Process text into chunks
+                    chunks = self.process_text(text)
+                    
+                    if not chunks:
+                        self.status_update.emit(f"Aviso: Nenhum chunk gerado de {file_path.name}")
+                        continue
+
+                    # Create metadata for each chunk
+                    metadatas = []
+                    for i, chunk in enumerate(chunks):
+                        metadata = {
+                            'source': str(file_path),
+                            'chunk_index': i,
+                            'total_chunks': len(chunks),
+                            'file_name': file_path.name,
+                            'file_type': file_path.suffix.lower()[1:],
+                            'chunk_id': str(uuid.uuid4())
+                        }
+                        metadatas.append(metadata)
+
+                    # Add to vector store with metadata
+                    self.vector_db.add(
+                        texts=chunks,
+                        metadatas=metadatas
+                    )
+                    
+                    processed_files += 1
+                    progress = int((processed_files / total_files) * 100)
+                    self.progress.emit(progress)
+                    self.file_processed.emit(f"Processado: {file_path.name}")
+                    
+                    # Check memory usage
+                    memory_usage = get_memory_usage()
+                    if memory_usage > 1000:  # Warning at 1GB
+                        self.memory_warning.emit(
+                            f"Uso de memória alto ({memory_usage:.1f}MB). "
+                            "Considere processar menos documentos por vez."
+                        )
+
+                except Exception as e:
+                    logger.error(f"Error processing file {file_path}: {str(e)}")
+                    self.error.emit(f"Erro ao processar {file_path.name}: {str(e)}")
+                    continue
+
+            if not self._stop_requested:
+                # Save the vector store after processing all files
+                if hasattr(self, 'persistence') and self.persistence and len(self.vector_db.documents) > 0:
+                    try:
+                        self.persistence.save_vector_store(self.vector_db)
+                        logger.info("Vector store saved successfully")
+                    except Exception as e:
+                        logger.error(f"Error saving vector store: {str(e)}")
+                        self.error.emit(f"Erro ao salvar dados: {str(e)}")
+                self.finished.emit()
+
+        except Exception as e:
+            logger.error(f"Error in document loader thread: {str(e)}")
+            self.error.emit(f"Erro ao processar documentos: {str(e)}")
 
     def extract_text_from_pdf(self, pdf_path):
         """Extract text from PDF file"""
@@ -339,7 +442,7 @@ class DocumentLoaderThread(QThread):
                 
                 # Show progress even inside the PDF processing
                 for i, page in enumerate(reader.pages):
-                    if not self.is_running:
+                    if self._stop_requested:
                         break
                     text += page.extract_text() + "\n"
                     
@@ -370,6 +473,9 @@ class DocumentLoaderThread(QThread):
             chunk_size: Target size for each chunk
             overlap: Number of words to overlap between chunks
         """
+        if not text or not text.strip():
+            return []
+
         words = text.split()
         total_words = len(words)
         chunks = []
@@ -403,108 +509,15 @@ class DocumentLoaderThread(QThread):
 
         return chunks
 
-    def run(self):
-        try:
-            # Force garbage collection before loading
-            gc.collect()
-            
-            # Ensure docs directory exists
-            self.docs_dir.mkdir(exist_ok=True)
-            
-            # Get list of supported files
-            all_files = []
-            for ext in self.file_extensions:
-                if self.file_extensions[ext]:  # Only include implemented handlers
-                    all_files.extend(list(self.docs_dir.glob(f'*.{ext}')))
-            
-            if not all_files:
-                self.error.emit("Nenhum arquivo suportado encontrado no diretório 'docs'")
-                return
-                
-            self.status_update.emit(f"Encontrados {len(all_files)} arquivos")
+    def _on_documents_loaded(self):
+        """Handle successful document loading"""
+        self.finished.emit()
 
-            # Process each file individually
-            for i, file_path in enumerate(all_files):
-                if not self.is_running:
-                    break
-                    
-                try:
-                    # Check memory usage
-                    memory_usage = get_memory_usage()
-                    if memory_usage > self.memory_threshold:
-                        warning_msg = f"Alto uso de memória: {memory_usage:.1f}MB"
-                        self.memory_warning.emit(warning_msg)
-                        gc.collect()
-                        time.sleep(1)
-
-                    file_extension = file_path.suffix.lower()[1:]  # Remove the dot
-                    if file_extension not in self.file_extensions or not self.file_extensions[file_extension]:
-                        self.status_update.emit(f"Formato não suportado: {file_path.name}")
-                        continue
-                        
-                    logger.info(f"Processing file: {file_path.name}")
-                    self.file_processed.emit(f"Processando: {file_path.name}")
-                    self.status_update.emit(f"Extraindo texto de {file_path.name}")
-
-                    # Extract text using the appropriate handler
-                    text = self.file_extensions[file_extension](file_path)
-                    
-                    # Process text into chunks
-                    self.status_update.emit(f"Dividindo {file_path.name} em partes")
-                    chunks = self.process_text(text)
-                    
-                    if not chunks:
-                        self.status_update.emit(f"Nenhum texto extraído de {file_path.name}")
-                        continue
-                        
-                    self.status_update.emit(f"Indexando {len(chunks)} partes de {file_path.name}")
-                    
-                    # Store chunks in vector database
-                    for j, chunk in enumerate(chunks):
-                        # Generate a unique ID for each chunk
-                        chunk_id = str(uuid.uuid4())
-                        
-                        # Create metadata
-                        metadata = {
-                            "source": file_path.name,
-                            "chunk_id": chunk_id,
-                            "chunk_index": j,
-                            "total_chunks": len(chunks)
-                        }
-                        
-                        # Add to vector database
-                        self.vector_db.add(
-                            texts=[chunk],
-                            metadatas=[metadata],
-                            ids=[chunk_id]
-                        )
-                        
-                        # Update status for large documents
-                        if len(chunks) > 20 and j % 10 == 0:
-                            progress_chunk = int((j + 1) / len(chunks) * 100)
-                            self.status_update.emit(f"Indexando {file_path.name}: {progress_chunk}%")
-                    
-                    # Update overall progress
-                    progress = int((i + 1) / len(all_files) * 100)
-                    self.progress.emit(progress)
-                    
-                    # Force garbage collection after each file
-                    gc.collect()
-                    
-                except Exception as e:
-                    logger.error(f"Error processing file {file_path.name}: {str(e)}")
-                    self.error.emit(f"Erro ao processar {file_path.name}: {str(e)}")
-                    continue
-
-            if self.is_running:
-                self.finished.emit()
-                
-        except Exception as e:
-            logger.error(f"Error in document loading: {str(e)}")
-            self.error.emit(str(e))
-
-    def stop(self):
-        self.is_running = False
+    def _on_document_load_error(self, error_message, progress=None):
+        """Handle document loading errors"""
+        if progress:
+            progress.close()
+        self.error.emit(f"Erro ao processar documentos: {error_message}")
 
 class SettingsView(QWidget):
     """Settings view for the application"""
@@ -617,14 +630,107 @@ class SettingsView(QWidget):
     def go_back(self):
         """Return to the main view"""
         if self.parent and hasattr(self.parent, 'stacked_widget'):
-            # Switch to main view (index 0)
-            self.parent.stacked_widget.setCurrentIndex(0)
+            # Switch to main view (index 1)
+            self.parent.stacked_widget.setCurrentIndex(1)
+            logger.info("Returning from settings to main view")
+
+class InitialSetupView(QWidget):
+    """Initial setup view for selecting document folder"""
+    setup_complete = pyqtSignal(str)  # Signal emitted when setup is complete with folder path
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+        
+        # Welcome message
+        welcome_label = QLabel("Welcome to iATAS - Analisador de ATAS")
+        welcome_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px;")
+        welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(welcome_label)
+
+        # Instructions
+        instructions = QLabel(
+            "Para começar, selecione a pasta onde estão localizados seus documentos.\n"
+            "Os documentos serão processados e indexados para análise."
+        )
+        instructions.setStyleSheet("font-size: 14px; margin: 20px;")
+        instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(instructions)
+
+        # Select folder button
+        self.select_folder_btn = QPushButton("Selecionar Pasta de Documentos")
+        self.select_folder_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        self.select_folder_btn.clicked.connect(self.select_folder)
+        layout.addWidget(self.select_folder_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # Selected folder label
+        self.folder_label = QLabel("Nenhuma pasta selecionada")
+        self.folder_label.setStyleSheet("color: #666; margin: 10px;")
+        self.folder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.folder_label)
+
+        # Continue button (initially disabled)
+        self.continue_btn = QPushButton("Continuar")
+        self.continue_btn.setEnabled(False)
+        self.continue_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
+            QPushButton:hover:enabled {
+                background-color: #1976D2;
+            }
+        """)
+        self.continue_btn.clicked.connect(self.complete_setup)
+        layout.addWidget(self.continue_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # Add stretch to center everything
+        layout.addStretch()
+        self.setLayout(layout)
+
+    def select_folder(self):
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Selecionar Pasta de Documentos",
+            "",
+            QFileDialog.Option.ShowDirsOnly
+        )
+        if folder:
+            self.folder_label.setText(f"Pasta selecionada: {folder}")
+            self.continue_btn.setEnabled(True)
+            self.selected_folder = folder
+
+    def complete_setup(self):
+        if hasattr(self, 'selected_folder'):
+            self.setup_complete.emit(self.selected_folder)
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_TITLE} v{APP_VERSION}")
-        self.resize(900, 700)
+        self.setMinimumSize(1200, 800)
         
         # Initialize persistence
         self.persistence = VectorStorePersistence(APP_DATA_DIR)
@@ -632,71 +738,124 @@ class MainWindow(QMainWindow):
         # Initialize chat history
         self.chat_history = ChatHistory()
         
-        # Show splash screen during initialization
-        self._show_splash_screen()
+        # Create central widget and main layout
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.main_layout = QVBoxLayout(self.central_widget)
         
-        # Setup stacked widget to hold main view and settings view
+        # Create stacked widget for different views
         self.stacked_widget = QStackedWidget()
-        self.setCentralWidget(self.stacked_widget)
+        self.main_layout.addWidget(self.stacked_widget)
         
-        # Create main content widget
-        self.main_widget = QWidget()
-        main_layout = QVBoxLayout(self.main_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        # Create initial setup view
+        self.initial_setup = InitialSetupView()
+        self.initial_setup.setup_complete.connect(self.on_setup_complete)
+        self.stacked_widget.addWidget(self.initial_setup)
+        
+        # Create main view
+        self.main_view = QWidget()
+        self.main_layout_main = QVBoxLayout(self.main_view)
+        self.stacked_widget.addWidget(self.main_view)
         
         # Create settings view
-        self.settings_view = SettingsView(self)
-        
-        # Add both widgets to the stacked widget
-        self.stacked_widget.addWidget(self.main_widget)
-        self.stacked_widget.addWidget(self.settings_view)
-        
-        # Set main view as default
-        self.stacked_widget.setCurrentIndex(0)
-        
         try:
-            # Initialize AI components
-            self._init_ai_components()
-            
-            # Create UI components
-            self._create_ui_components(main_layout)
-            
-            # Create status bar
-            self._create_status_bar()
-            
-            # Initialize chat count
-            self._update_chat_count()
-            
-            # Apply styles
-            self._apply_styles()
-            
-            # Load persisted data
+            logger.info("Creating settings view...")
+            self.settings_view = SettingsView(self)
+            self.stacked_widget.addWidget(self.settings_view)
+            logger.info(f"Settings view added to stacked widget, total widgets: {self.stacked_widget.count()}")
+        except Exception as e:
+            logger.error(f"Error creating settings view: {str(e)}")
+            QMessageBox.warning(self, "Aviso", f"Erro ao inicializar configurações: {str(e)}")
+        
+        # Initialize other components
+        self._init_ai_components()
+        self._create_ui_components(self.main_layout_main)
+        self._create_status_bar()
+        self._apply_styles()
+        
+        # Check if we have existing documents
+        has_documents = self._check_for_existing_documents()
+        
+        if has_documents:
+            # If documents exist, skip the folder selection and go straight to main view
+            self.stacked_widget.setCurrentWidget(self.main_view)
             self._load_persisted_data()
+            # Explicitly ensure buttons are enabled
+            QTimer.singleShot(500, self._ensure_buttons_enabled)
+            self.status_bar.showMessage("Documentos carregados da base de dados", 3000)
+        else:
+            # No documents, start with folder selection
+            self.stacked_widget.setCurrentWidget(self.initial_setup)
             
-            # Ensure chat history is displayed
-            QTimer.singleShot(200, self.update_history_view)
+        # Start memory usage timer
+        self.memory_timer = QTimer()
+        self.memory_timer.timeout.connect(self._update_memory_usage)
+        self.memory_timer.start(5000)  # Update every 5 seconds
+
+    def _check_for_existing_documents(self):
+        """Check if there are already stored documents in the database"""
+        try:
+            # First try to load vector store from persistence
+            success = self.persistence.load_vector_store(self.vector_db)
+            
+            # Check if we have documents in the vector store
+            if success and hasattr(self.vector_db, 'documents') and len(self.vector_db.documents) > 0:
+                logger.info(f"Found {len(self.vector_db.documents)} existing documents")
+                return True
+            
+            return False
+        except Exception as e:
+            logger.error(f"Error checking for existing documents: {str(e)}")
+            return False
+            
+    def on_setup_complete(self, folder_path):
+        """Handle completion of initial setup"""
+        try:
+            # Store the selected folder path
+            self.docs_folder = folder_path
+            
+            # Disable buttons during processing
+            self.ask_button.setEnabled(False)
+            self.load_docs_button.setEnabled(False)
+            
+            # Update status
+            self.status_bar.showMessage("Iniciando processamento dos documentos...")
+            
+            # Create progress dialog
+            self.progress_dialog = QProgressDialog("Processando documentos...", "Cancelar", 0, 100, self)
+            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progress_dialog.setWindowTitle("Processando Documentos")
+            self.progress_dialog.setMinimumDuration(0)
+            self.progress_dialog.setAutoClose(True)
+            self.progress_dialog.setAutoReset(True)
+            
+            # Create and start document loader thread
+            self.loader_thread = DocumentLoaderThread(self.vector_db, self.persistence)
+            self.loader_thread.progress.connect(self.progress_dialog.setValue)
+            self.loader_thread.finished.connect(self._on_documents_loaded)
+            self.loader_thread.error.connect(self._on_document_load_error)
+            self.loader_thread.file_processed.connect(self._update_document_status)
+            self.loader_thread.memory_warning.connect(self._show_memory_warning)
+            self.loader_thread.status_update.connect(self.progress_dialog.setLabelText)
+            
+            # Set the folder path for processing
+            self.loader_thread.set_folder_path(self.docs_folder)
+            
+            # Switch to main view - but keep UI disabled until processing is complete
+            self.stacked_widget.setCurrentWidget(self.main_view)
+            
+            # Start processing
+            self.loader_thread.start()
+            
+            # Connect cancel button
+            self.progress_dialog.canceled.connect(self.loader_thread.stop)
             
         except Exception as e:
-            logger.error(f"Error initializing components: {str(e)}")
-            
-            # Hide splash screen if error
-            if hasattr(self, 'splash'):
-                self.splash.finish(self)
-            QMessageBox.critical(self, "Erro de Inicialização", 
-                              f"Erro ao inicializar componentes: {str(e)}\n"
-                              "Verifique se o arquivo .env está configurado corretamente.")
-
-    def _show_splash_screen(self):
-        """Show a splash screen during app initialization"""
-        splash_pixmap = QPixmap(220, 120)  # Create a blank pixmap
-        splash_pixmap.fill(Qt.GlobalColor.white)
-        self.splash = QSplashScreen(splash_pixmap, Qt.WindowType.WindowStaysOnTopHint)
-        
-        # Add text to splash screen
-        self.splash.showMessage(f"{APP_TITLE} v{APP_VERSION}\nIniciando...", 
-                               Qt.AlignmentFlag.AlignCenter, Qt.GlobalColor.black)
-        self.splash.show()
-        QApplication.processEvents()
+            logger.error(f"Error in setup completion: {str(e)}")
+            QMessageBox.critical(self, "Erro", f"Erro ao iniciar processamento: {str(e)}")
+            self.status_bar.showMessage("Erro ao iniciar processamento", 5000)
+            self.ask_button.setEnabled(True)
+            self.load_docs_button.setEnabled(True)
 
     def _init_ai_components(self):
         """Initialize AI components"""
@@ -731,15 +890,8 @@ class MainWindow(QMainWindow):
                 '''
             )
             
-            # Hide splash screen after components are loaded
-            if hasattr(self, 'splash'):
-                self.splash.finish(self)
-                
         except Exception as e:
             logger.error(f"Error initializing components: {str(e)}")
-            # Hide splash screen if error
-            if hasattr(self, 'splash'):
-                self.splash.finish(self)
             QMessageBox.critical(self, "Erro de Inicialização", 
                               f"Erro ao inicializar componentes: {str(e)}\n"
                               "Verifique se o arquivo .env está configurado corretamente.")
@@ -945,7 +1097,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(question_label)
         
         self.question_input = QTextEdit()
-        self.question_input.setPlaceholderText("Digite sua pergunta aqui...")
+        self.question_input.setPlaceholderText("Carregue documentos para começar...")
         self.question_input.setMaximumHeight(100)
         self.question_input.setFont(QFont("Segoe UI", 14))
         self.question_input.setStyleSheet("""
@@ -961,7 +1113,13 @@ class MainWindow(QMainWindow):
                 border: 1px solid #5c85d6;
                 background-color: #fafbfc;
             }
+            QTextEdit:disabled {
+                background-color: #f0f0f0;
+                color: #939aab;
+            }
         """)
+        # Initially disable the question input until documents are loaded
+        self.question_input.setEnabled(False)
         layout.addWidget(self.question_input)
         
         # Buttons with modern font
@@ -1071,7 +1229,7 @@ class MainWindow(QMainWindow):
                 color: #363a43;
                 font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
             }
-            QProgressDialog {
+            QProgressDialog, QMessageBox, QFileDialog {
                 background-color: white;
                 border-radius: 6px;
                 font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
@@ -1119,21 +1277,29 @@ class MainWindow(QMainWindow):
                 if file_count > 0:
                     self._update_document_status(f"{file_count} documentos carregados")
                     self.doc_count_label.setText(f"Documentos: {file_count}")
+                    
+                    # Enable chat functionality
                     self.ask_button.setEnabled(True)
+                    self.question_input.setEnabled(True)
+                    self.question_input.setPlaceholderText("Digite sua pergunta sobre os documentos aqui...")
                 else:
                     self._update_document_status("Nenhum documento encontrado na base de dados")
                     self.ask_button.setEnabled(False)
+                    self.question_input.setEnabled(False)
                     
                 self.status_bar.showMessage("Dados carregados com sucesso!", 3000)
             else:
                 self._update_document_status("Nenhum documento encontrado na base de dados")
                 self.status_bar.showMessage("Nenhum dado persistido encontrado", 3000)
                 self.ask_button.setEnabled(False)
+                self.question_input.setEnabled(False)
                 
         except Exception as e:
             logger.error(f"Error loading persisted data: {str(e)}")
             self.status_bar.showMessage("Erro ao carregar dados persistidos", 3000)
             self._update_document_status("Erro ao carregar documentos")
+            self.ask_button.setEnabled(False)
+            self.question_input.setEnabled(False)
 
     def _update_document_status(self, text):
         """Update document status display"""
@@ -1406,48 +1572,47 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"Erro: {error_message}", 5000)
 
     def load_documents(self):
-        """Load PDF documents"""
-        try:
-            # Disable buttons during loading
-            self.load_docs_button.setEnabled(False)
-            self.ask_button.setEnabled(False)
-            
-            # Create progress dialog
-            self.progress = QProgressDialog("Carregando documentos...", "Cancelar", 0, 100, self)
-            self.progress.setWindowModality(Qt.WindowModality.WindowModal)
-            self.progress.setCancelButton(None)  # Better UX to not allow cancellation
-            self.progress.setMinimumDuration(0)
-            self.progress.setAutoClose(False)
-            self.progress.setAutoReset(False)
-            self.progress.show()
-            
-            # Update status
-            self._update_document_status("Carregando documentos...")
-            self.status_bar.showMessage("Carregando e indexando documentos...")
-            
-            # Create and start document loader thread
-            self.doc_loader = DocumentLoaderThread(self.vector_db)
-            self.doc_loader.progress.connect(self.progress.setValue)
-            self.doc_loader.file_processed.connect(self.progress.setLabelText)
-            self.doc_loader.memory_warning.connect(self._show_memory_warning)
-            self.doc_loader.finished.connect(self._on_documents_loaded)
-            self.doc_loader.error.connect(self._on_document_load_error)
-            self.doc_loader.start()
-            
-        except Exception as e:
-            logger.error(f"Error starting document loading: {str(e)}")
-            self._on_document_load_error(str(e), None)
+        """Load documents from the selected folder"""
+        if not hasattr(self, 'docs_folder'):
+            QMessageBox.warning(self, "Aviso", "Por favor, selecione uma pasta de documentos primeiro.")
+            return
+
+        # Create progress dialog
+        self.progress_dialog = QProgressDialog("Processando documentos...", "Cancelar", 0, 100, self)
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progress_dialog.setWindowTitle("Processando Documentos")
+        self.progress_dialog.setMinimumDuration(0)
+        self.progress_dialog.setAutoClose(True)
+        self.progress_dialog.setAutoReset(True)
+        
+        # Create and start document loader thread
+        self.loader_thread = DocumentLoaderThread(self.vector_db, self.persistence)
+        self.loader_thread.progress.connect(self.progress_dialog.setValue)
+        self.loader_thread.finished.connect(self._on_documents_loaded)
+        self.loader_thread.error.connect(self._on_document_load_error)
+        self.loader_thread.file_processed.connect(self._update_document_status)
+        self.loader_thread.memory_warning.connect(self._show_memory_warning)
+        self.loader_thread.status_update.connect(self.progress_dialog.setLabelText)
+        
+        # Set the folder path for processing
+        self.loader_thread.set_folder_path(self.docs_folder)
+        
+        # Start processing
+        self.loader_thread.start()
+        
+        # Connect cancel button
+        self.progress_dialog.canceled.connect(self.loader_thread.stop)
 
     def _show_memory_warning(self, message):
         """Show memory warning message"""
-        self.progress.setLabelText(message)
+        self.progress_dialog.setLabelText(message)
         self.status_bar.showMessage(message)
         self.memory_label.setText(message)
         self.memory_label.setStyleSheet("color: red; font-weight: bold;")
 
     def _on_documents_loaded(self):
         """Handle successful document loading"""
-        self.progress.close()
+        self.progress_dialog.close()
         self.load_docs_button.setEnabled(True)
         self.ask_button.setEnabled(True)
         
@@ -1467,6 +1632,11 @@ class MainWindow(QMainWindow):
         # Show success message
         QMessageBox.information(self, "Sucesso", f"Documentos carregados com sucesso! ({file_count} arquivos, {chunk_count} fragmentos)")
         self.status_bar.showMessage("Documentos carregados com sucesso!", 5000)
+        
+        # Enable chat functionality
+        self.ask_button.setEnabled(True)
+        self.question_input.setEnabled(True)
+        self.question_input.setPlaceholderText("Digite sua pergunta sobre os documentos aqui...")
         
         # Save the vector store to disk
         self.persistence.save_vector_store(self.vector_db)
@@ -1592,7 +1762,27 @@ class MainWindow(QMainWindow):
 
     def show_settings(self):
         """Show the settings view"""
-        self.stacked_widget.setCurrentIndex(1)
+        try:
+            logger.info(f"Attempting to show settings view, current index: {self.stacked_widget.currentIndex()}")
+            logger.info(f"Stacked widget count: {self.stacked_widget.count()}")
+            for i in range(self.stacked_widget.count()):
+                widget = self.stacked_widget.widget(i)
+                logger.info(f"Widget at index {i}: {type(widget).__name__}")
+            
+            # Switch to settings view (index 2)
+            self.stacked_widget.setCurrentIndex(2)
+            logger.info(f"Settings view activated, new index: {self.stacked_widget.currentIndex()}")
+        except Exception as e:
+            logger.error(f"Error showing settings: {str(e)}")
+            QMessageBox.critical(self, "Erro", f"Não foi possível exibir as configurações: {str(e)}")
+
+    def _ensure_buttons_enabled(self):
+        """Force button state update if documents are loaded"""
+        if hasattr(self, 'vector_db') and hasattr(self.vector_db, 'documents') and len(self.vector_db.documents) > 0:
+            logger.info("Ensuring buttons are enabled because documents exist")
+            self.ask_button.setEnabled(True)
+            self.question_input.setEnabled(True)
+            self.question_input.setPlaceholderText("Digite sua pergunta sobre os documentos aqui...")
 
 class AgnoCompatibleDocument:
     """Document class compatible with agno framework's expected interface"""
@@ -1774,11 +1964,20 @@ def main():
     # Set application style
     app.setStyle("Fusion")
     
+    # Show splash screen
+    splash_pix = QPixmap('settings-white.png')
+    splash = QSplashScreen(splash_pix, Qt.WindowType.WindowStaysOnTopHint)
+    splash.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
+    splash.show()
+    app.processEvents()
+    
     # Create and show main window
     window = MainWindow()
     window.show()
     
-    # Run application
+    # Close splash screen
+    splash.finish(window)
+    
     sys.exit(app.exec())
 
 if __name__ == "__main__":
