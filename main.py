@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QTextEdit, QPushButton, QLabel, 
                             QFileDialog, QMessageBox, QProgressDialog,
                             QStatusBar, QSplashScreen, QScrollArea, QFrame,
-                            QStackedWidget)
+                            QStackedWidget, QSizePolicy)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QDateTime, QSize
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor, QPainter
 from agno.agent import Agent
@@ -526,6 +526,8 @@ class SettingsView(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.initUI()
+        # Set white background for the settings view
+        self.setStyleSheet("background-color: white;")
         
     def initUI(self):
         """Initialize the UI components"""
@@ -576,8 +578,17 @@ class SettingsView(QWidget):
         separator.setStyleSheet("background-color: #e0e4e8; margin-top: 5px; margin-bottom: 20px;")
         layout.addWidget(separator)
         
+        # Create a scroll area for settings content
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        # Create a container widget for the scroll area
+        settings_container = QWidget()
+        settings_container.setStyleSheet("background-color: white;")
+        settings_content_layout = QVBoxLayout(settings_container)
+        
         # Settings content with placeholders for future development
-        settings_content = QVBoxLayout()
         
         # Section: API Configuration
         api_section = QVBoxLayout()
@@ -590,7 +601,7 @@ class SettingsView(QWidget):
         api_info.setStyleSheet("color: #939aab; margin-bottom: 20px;")
         api_section.addWidget(api_info)
         
-        settings_content.addLayout(api_section)
+        settings_content_layout.addLayout(api_section)
         
         # Section: Document Processing
         doc_section = QVBoxLayout()
@@ -603,7 +614,7 @@ class SettingsView(QWidget):
         doc_info.setStyleSheet("color: #939aab; margin-bottom: 20px;")
         doc_section.addWidget(doc_info)
         
-        settings_content.addLayout(doc_section)
+        settings_content_layout.addLayout(doc_section)
         
         # Section: Application Settings
         app_section = QVBoxLayout()
@@ -620,9 +631,29 @@ class SettingsView(QWidget):
         app_version.setStyleSheet("color: #515769; font-weight: bold;")
         app_section.addWidget(app_version)
         
-        settings_content.addLayout(app_section)
+        settings_content_layout.addLayout(app_section)
         
-        layout.addLayout(settings_content)
+        # Add responsive UI size section
+        ui_section = QVBoxLayout()
+        ui_title = QLabel("Tamanho da Interface")
+        ui_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        ui_title.setStyleSheet("color: #515769; margin-bottom: 10px;")
+        ui_section.addWidget(ui_title)
+        
+        ui_info = QLabel("O aplicativo agora adapta-se automaticamente a telas menores.")
+        ui_info.setStyleSheet("color: #939aab; margin-bottom: 20px;")
+        ui_section.addWidget(ui_info)
+        
+        settings_content_layout.addLayout(ui_section)
+        
+        # Add stretching space at the bottom
+        settings_content_layout.addStretch()
+        
+        # Set the container widget as the scroll area's widget
+        scroll_area.setWidget(settings_container)
+        
+        # Add the scroll area to the main layout
+        layout.addWidget(scroll_area)
         
         # Add stretching space at the bottom
         layout.addStretch()
@@ -730,7 +761,10 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_TITLE} v{APP_VERSION}")
-        self.setMinimumSize(1200, 800)
+        # Set minimum window size
+        self.setMinimumSize(640, 480)  # Reduced from 800x600 to 640x480 (VGA size)
+        # Set initial window size to 800x600
+        self.resize(800, 600)
         
         # Initialize persistence
         self.persistence = VectorStorePersistence(APP_DATA_DIR)
@@ -988,6 +1022,8 @@ class MainWindow(QMainWindow):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Make scroll area take available space and resize with window
+        scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
         # Container widget for history content
         self.history_content = QTextEdit()
@@ -1099,6 +1135,8 @@ class MainWindow(QMainWindow):
         self.question_input = QTextEdit()
         self.question_input.setPlaceholderText("Carregue documentos para começar...")
         self.question_input.setMaximumHeight(100)
+        # Set size policy to make the input area resize properly
+        self.question_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self.question_input.setFont(QFont("Segoe UI", 14))
         self.question_input.setStyleSheet("""
             QTextEdit {
@@ -1131,6 +1169,8 @@ class MainWindow(QMainWindow):
         self.ask_button.setEnabled(False)  # Disabled until documents are loaded
         self.ask_button.setFont(QFont("Segoe UI", 11))
         self.ask_button.setMinimumHeight(40)
+        # Make the button responsive to resizing
+        self.ask_button.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
         button_layout.addWidget(self.ask_button)
         
         self.load_docs_button = QPushButton("Carregar Documentos")
@@ -1138,6 +1178,8 @@ class MainWindow(QMainWindow):
         self.load_docs_button.clicked.connect(self.load_documents)
         self.load_docs_button.setFont(QFont("Segoe UI", 11))
         self.load_docs_button.setMinimumHeight(40)
+        # Make the button responsive to resizing
+        self.load_docs_button.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
         button_layout.addWidget(self.load_docs_button)
         
         layout.addLayout(button_layout)
