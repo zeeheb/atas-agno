@@ -1026,117 +1026,298 @@ class InitialSetupView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.initUI()
-
-    def initUI(self):
-        layout = QVBoxLayout()
         
-        # Welcome message
-        welcome_label = QLabel("Bem-vindo ao iATAS - Analisador de ATAS")
-        welcome_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px;")
-        welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(welcome_label)
-
-        # Instructions
-        instructions = QLabel(
-            "Para começar, selecione a pasta onde estão localizados seus documentos.\n"
-            "Os documentos serão processados e indexados para análise."
-        )
-        instructions.setStyleSheet("font-size: 14px; margin: 20px;")
-        instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(instructions)
-
-        # Select folder button
-        self.select_folder_btn = QPushButton("Selecionar Pasta de Documentos")
+    def initUI(self):
+        # Set white background
+        self.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
+            }
+        """)
+        
+        # Set minimum window size to ensure content has space to display
+        self.setMinimumSize(550, 400)
+        
+        # Main layout with balanced margins for screen utilization
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(30, 20, 30, 20)  # Increased horizontal margins
+        main_layout.setSpacing(15)  # Increased spacing
+        
+        # Header section with gradient background - fill width but stay compact height
+        header = QWidget()
+        header.setFixedHeight(70)
+        header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        header.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4a6fc3, stop:1 #5c85d6);
+                border-radius: 6px;
+            }
+        """)
+        
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(20, 8, 20, 8)
+        header_layout.setSpacing(2)
+        
+        # App title - much smaller
+        app_title = QLabel("Bem-vindo ao iATAS")
+        app_title.setStyleSheet("""
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+        """)
+        header_layout.addWidget(app_title)
+        
+        # App subtitle - smaller and combined with setup instruction
+        app_subtitle = QLabel("Analisador Inteligente de ATAS - Configure para começar")
+        app_subtitle.setStyleSheet("""
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+        """)
+        header_layout.addWidget(app_subtitle)
+        
+        main_layout.addWidget(header)
+        
+        # Content Cards Container - ensure it expands to fill space
+        content_container = QWidget()
+        content_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        content_container.setStyleSheet("""
+            QWidget {
+                background-color: white;
+            }
+        """)
+        
+        content_layout = QVBoxLayout(content_container)
+        content_layout.setSpacing(15)  # Increased spacing between cards
+        content_layout.setContentsMargins(0, 10, 0, 10)  # Adjusted margins
+        
+        # --------- FOLDER SELECTION CARD ---------
+        folder_card = QWidget()
+        folder_card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        folder_card.setStyleSheet("""
+            QWidget {
+                background-color: #f8f9fa;
+                border-radius: 6px;
+                border: 1px solid #e0e4e8;
+            }
+            QWidget:hover {
+                border: 1px solid #c0c4c8;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            }
+        """)
+        
+        folder_layout = QVBoxLayout(folder_card)
+        folder_layout.setContentsMargins(15, 15, 15, 15)  # Increased padding
+        folder_layout.setSpacing(8)  # Increased spacing
+        
+        # Card title with icon - more compact
+        folder_title_layout = QHBoxLayout()
+        folder_title_layout.setSpacing(8)
+        
+        folder_icon_label = QLabel("📁")
+        folder_icon_label.setStyleSheet("font-size: 14px;")  # Smaller icon
+        folder_title_layout.addWidget(folder_icon_label)
+        
+        folder_title = QLabel("Selecione a Pasta de Documentos")
+        folder_title.setStyleSheet("""
+            font-size: 13px;
+            font-weight: bold;
+            color: #202124;
+        """)
+        folder_title_layout.addWidget(folder_title)
+        folder_title_layout.addStretch()
+        
+        folder_layout.addLayout(folder_title_layout)
+        
+        # Folder selection button and display
+        folder_input_layout = QHBoxLayout()
+        folder_input_layout.setSpacing(10)
+        
+        self.selected_folder_display = QLineEdit()
+        self.selected_folder_display.setReadOnly(True)
+        self.selected_folder_display.setPlaceholderText("Nenhuma pasta selecionada")
+        self.selected_folder_display.setFixedHeight(30)  # Slightly taller for better visibility
+        self.selected_folder_display.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #dadce0;
+                border-radius: 4px;
+                padding: 4px 10px;
+                background-color: white;
+                color: #3c4043;
+                font-size: 12px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #4285f4;
+            }
+        """)
+        folder_input_layout.addWidget(self.selected_folder_display, 1)
+        
+        self.select_folder_btn = QPushButton("Selecionar")
+        self.select_folder_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.select_folder_btn.setFixedHeight(30)  # Slightly taller for better visibility
+        self.select_folder_btn.setFixedWidth(100)  # Fixed width for better proportion
         self.select_folder_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
-                padding: 10px 20px;
                 border: none;
-                border-radius: 5px;
-                font-size: 14px;
+                border-radius: 4px;
+                padding: 0 12px;
+                font-size: 12px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #45a049;
+                background-color: #43A047;
+            }
+            QPushButton:pressed {
+                background-color: #388E3C;
             }
         """)
         self.select_folder_btn.clicked.connect(self.select_folder)
-        layout.addWidget(self.select_folder_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Selected folder label
-        self.folder_label = QLabel("Nenhuma pasta selecionada")
-        self.folder_label.setStyleSheet("color: #666; margin: 10px;")
-        self.folder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.folder_label)
+        folder_input_layout.addWidget(self.select_folder_btn)
         
-        # API Key section
-        api_key_section = QWidget()
-        api_key_layout = QVBoxLayout(api_key_section)
+        folder_layout.addLayout(folder_input_layout)
         
-        # API Key label
-        api_key_title = QLabel("Chave API OpenAI")
-        api_key_title.setStyleSheet("font-size: 16px; font-weight: bold; margin-top: 20px;")
-        api_key_layout.addWidget(api_key_title, alignment=Qt.AlignmentFlag.AlignCenter)
+        # Add stretch between cards for flexible spacing
+        content_layout.addWidget(folder_card)
+        content_layout.addSpacing(5)  # Add small space between cards
         
-        # API Key instructions
-        api_key_instructions = QLabel(
-            "A chave API da OpenAI é necessária para analisar os documentos.\n"
-            "A chave API é armazenada localmente e nunca é compartilhada."
-        )
-        api_key_instructions.setStyleSheet("font-size: 14px; margin: 5px 20px;")
-        api_key_instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        api_key_instructions.setWordWrap(True)
-        api_key_layout.addWidget(api_key_instructions)
+        # --------- API KEY CARD ---------
+        api_card = QWidget()
+        api_card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        api_card.setStyleSheet("""
+            QWidget {
+                background-color: #f8f9fa;
+                border-radius: 6px;
+                border: 1px solid #e0e4e8;
+            }
+            QWidget:hover {
+                border: 1px solid #c0c4c8;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            }
+        """)
         
-        # API Key input
+        api_layout = QVBoxLayout(api_card)
+        api_layout.setContentsMargins(15, 15, 15, 15)  # Increased padding
+        api_layout.setSpacing(8)  # Increased spacing
+        
+        # Card title with icon
+        api_title_layout = QHBoxLayout()
+        api_title_layout.setSpacing(8)
+        
+        api_icon_label = QLabel("🔑")
+        api_icon_label.setStyleSheet("font-size: 14px;")  # Smaller icon
+        api_title_layout.addWidget(api_icon_label)
+        
+        api_title = QLabel("Chave API OpenAI")
+        api_title.setStyleSheet("""
+            font-size: 13px;
+            font-weight: bold;
+            color: #202124;
+        """)
+        api_title_layout.addWidget(api_title)
+        api_title_layout.addStretch()
+        
+        api_layout.addLayout(api_title_layout)
+        
+        # API description - more concise
+        api_description = QLabel("A chave API é armazenada localmente e nunca compartilhada.")
+        api_description.setStyleSheet("""
+            color: #5f6368;
+            font-size: 11px;
+        """)
+        api_description.setWordWrap(True)
+        api_layout.addWidget(api_description)
+        
+        # API key input
         self.api_key_input = QLineEdit()
         self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.api_key_input.setPlaceholderText("Digite sua chave API OpenAI (começa com 'sk-')")
+        self.api_key_input.setPlaceholderText("Digite sua chave API OpenAI (sk-...)")
+        self.api_key_input.setFixedHeight(30)  # Slightly taller for better visibility
         self.api_key_input.setStyleSheet("""
             QLineEdit {
                 border: 1px solid #dadce0;
-                border-radius: 8px;
-                padding: 12px;
+                border-radius: 4px;
+                padding: 4px 10px;
                 background-color: white;
                 color: #3c4043;
-                font-size: 14px;
-                margin: 10px 20px;
+                font-size: 12px;
             }
             QLineEdit:focus {
-                border: 2px solid #4285f4;
-                padding: 11px;
+                border: 1px solid #4285f4;
             }
         """)
-        api_key_layout.addWidget(self.api_key_input)
+        api_layout.addWidget(self.api_key_input)
         
-        # Add API Key section to main layout
-        layout.addWidget(api_key_section)
-
-        # Continue button (initially disabled)
+        
+        content_layout.addWidget(api_card)
+        
+        # Add stretch to push content to the top and let it expand
+        content_layout.addStretch(1)
+        
+        # Add content container to main layout
+        main_layout.addWidget(content_container, 1)  # Give it a stretch factor of 1
+        
+        # Status indicators layout - more compact
+        status_layout = QHBoxLayout()
+        status_layout.setSpacing(10)
+        
+        # Folder status indicator
+        self.folder_status = QLabel("Pasta: Não selecionada")
+        self.folder_status.setStyleSheet("""
+            color: #9AA0A6;
+            font-size: 11px;
+        """)
+        status_layout.addWidget(self.folder_status)
+        
+        # API Key status indicator
+        self.api_status = QLabel("API Key: Não configurada")
+        self.api_status.setStyleSheet("""
+            color: #9AA0A6;
+            font-size: 11px;
+        """)
+        status_layout.addWidget(self.api_status)
+        
+        status_layout.addStretch()
+        
+        main_layout.addLayout(status_layout)
+        
+        # Continue button - wider to match content width
         self.continue_btn = QPushButton("Continuar")
         self.continue_btn.setEnabled(False)
+        self.continue_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.continue_btn.setFixedHeight(36)  # Slightly taller for better visibility
+        self.continue_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.continue_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
                 color: white;
-                padding: 10px 20px;
                 border: none;
-                border-radius: 5px;
-                font-size: 14px;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
+                border-radius: 4px;
+                font-size: 13px;
+                font-weight: bold;
+                margin-top: 10px;
+                padding: 6px 0;
             }
             QPushButton:hover:enabled {
+                background-color: #1E88E5;
+            }
+            QPushButton:pressed:enabled {
                 background-color: #1976D2;
+            }
+            QPushButton:disabled {
+                background-color: #E0E0E0;
+                color: #9E9E9E;
             }
         """)
         self.continue_btn.clicked.connect(self.complete_setup)
-        layout.addWidget(self.continue_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Add stretch to center everything
-        layout.addStretch()
-        self.setLayout(layout)
+        
+        main_layout.addWidget(self.continue_btn)
+        
+        # Add stretch to keep everything at the top
+        main_layout.addStretch()
+        
+        self.setLayout(main_layout)
         
         # Connect API key input to validation
         self.api_key_input.textChanged.connect(self.validate_inputs)
@@ -1149,14 +1330,24 @@ class InitialSetupView(QWidget):
             QFileDialog.Option.ShowDirsOnly
         )
         if folder:
-            self.folder_label.setText(f"Pasta selecionada: {folder}")
+            self.selected_folder_display.setText(folder)
             self.selected_folder = folder
+            self.folder_status.setText(f"Pasta: Selecionada ✓")
+            self.folder_status.setStyleSheet("color: #4CAF50; font-size: 13px;")
             self.validate_inputs()
 
     def validate_inputs(self):
         # Enable continue button only if both folder and API key are provided
         has_folder = hasattr(self, 'selected_folder')
         has_api_key = bool(self.api_key_input.text().strip())
+        
+        # Update API key status
+        if has_api_key:
+            self.api_status.setText("API Key: Configurada ✓")
+            self.api_status.setStyleSheet("color: #4CAF50; font-size: 13px;")
+        else:
+            self.api_status.setText("API Key: Não configurada")
+            self.api_status.setStyleSheet("color: #9AA0A6; font-size: 13px;")
         
         self.continue_btn.setEnabled(has_folder and has_api_key)
 
