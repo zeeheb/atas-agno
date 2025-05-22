@@ -6,12 +6,12 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QTextEdit, QPushButton, QLabel, 
                             QFileDialog, QMessageBox, QProgressDialog,
                             QStatusBar, QSplashScreen, QScrollArea, QFrame,
-                            QStackedWidget, QSizePolicy)
+                            QStackedWidget, QSizePolicy, QLineEdit)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QDateTime, QSize
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor, QPainter
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv, find_dotenv, set_key
 from agno.embedder.openai import OpenAIEmbedder
 import logging
 import psutil
@@ -34,6 +34,61 @@ logger = logging.getLogger(__name__)
 APP_TITLE = "iATAS - Analisador de ATAS"
 APP_VERSION = "1.2.0"
 APP_DATA_DIR = "app_data"
+
+class SettingsManager:
+    """Handles application settings persistence"""
+    
+    def __init__(self, app_data_dir=APP_DATA_DIR):
+        """Initialize settings manager"""
+        self.app_data_dir = Path(app_data_dir)
+        self.settings_file = self.app_data_dir / "settings.json"
+        self._ensure_dir_exists()
+        self.settings = self.load_settings()
+        
+    def _ensure_dir_exists(self):
+        """Create the app data directory if it doesn't exist"""
+        self.app_data_dir.mkdir(exist_ok=True, parents=True)
+        
+    def load_settings(self):
+        """Load settings from file"""
+        if not self.settings_file.exists():
+            return {"openai_api_key": ""}
+            
+        try:
+            with open(self.settings_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading settings: {str(e)}")
+            return {"openai_api_key": ""}
+            
+    def save_settings(self):
+        """Save settings to file"""
+        try:
+            with open(self.settings_file, 'w') as f:
+                json.dump(self.settings, f)
+            logger.info("Settings saved successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving settings: {str(e)}")
+            return False
+            
+    def get_api_key(self):
+        """Get the OpenAI API key"""
+        return self.settings.get("openai_api_key", "")
+        
+    def set_api_key(self, api_key):
+        """Set the OpenAI API key"""
+        self.settings["openai_api_key"] = api_key
+        # Also set the environment variable for immediate use
+        os.environ["OPENAI_API_KEY"] = api_key
+        return self.save_settings()
+        
+    def apply_settings(self):
+        """Apply settings to the environment"""
+        # Set environment variables based on settings
+        if "openai_api_key" in self.settings and self.settings["openai_api_key"]:
+            os.environ["OPENAI_API_KEY"] = self.settings["openai_api_key"]
+            logger.info("Applied API key from settings")
 
 def get_memory_usage():
     """Get current memory usage in MB"""
@@ -511,13 +566,83 @@ class DocumentLoaderThread(QThread):
 
     def _on_documents_loaded(self):
         """Handle successful document loading"""
-        self.finished.emit()
+        self.progress_dialog.close()
+        self.load_docs_button.setEnabled(True)
+        
+        # Check for API key
+        has_api_key = hasattr(self, 'settings_manager') and self.settings_manager.get_api_key() != ""
+        
+        # Count unique file sources in metadata instead of total chunks
+        sources = set()
+        for metadata in self.vector_db.metadatas:
+            if "source" in metadata:
+                sources.add(metadata["source"])
+        
+        file_count = len(sources)
+        chunk_count = len(self.vector_db.documents)
+        
+        # Update status - show file count, not chunk count
+        self._update_document_status(f"{file_count} documentos carregados")
+        self.doc_count_label.setText(f"Documentos: {file_count}")
+        
+        # Show success message
+        QMessageBox.information(self, "Sucesso", f"Documentos carregados com sucesso! ({file_count} arquivos, {chunk_count} fragmentos)")
+        self.status_bar.showMessage("Documentos carregados com sucesso!", 5000)
+        
+        # Enable chat functionality only if we have API key
+        if has_api_key:
+            self.ask_button.setEnabled(True)
+            self.question_input.setEnabled(True)
+            self.question_input.setPlaceholderText("Digite sua pergunta sobre os documentos aqui...")
+        else:
+            self.ask_button.setEnabled(False)
+            self.question_input.setEnabled(True)
+            self.question_input.setPlaceholderText("Configure sua chave API OpenAI nas configurações para fazer perguntas...")
+            self.ask_button.setToolTip("Chave API OpenAI não configurada. Acesse as configurações.")
+            
+            # Show a message about missing API key
+            QMessageBox.warning(
+                self, 
+                "Chave API Necessária", 
+                "Seus documentos foram carregados, mas uma chave API OpenAI é necessária para fazer perguntas.\n\n"
+                "Por favor, configure sua chave API nas configurações do aplicativo."
+            )
+        
+        # Save the vector store to disk
+        self.persistence.save_vector_store(self.vector_db)
 
     def _on_document_load_error(self, error_message, progress=None):
         """Handle document loading errors"""
         if progress:
             progress.close()
-        self.error.emit(f"Erro ao processar documentos: {error_message}")
+        self.load_docs_button.setEnabled(True)
+        self.ask_button.setEnabled(True)
+        self._update_document_status("Erro ao carregar documentos")
+        QMessageBox.critical(self, "Erro", f"Erro ao carregar documentos: {error_message}")
+        self.status_bar.showMessage(f"Erro: {error_message}", 5000)
+        
+        
+    def closeEvent(self, event):
+        """Handle the window close event"""
+        # Save persistence data
+        try:
+            self.status_bar.showMessage("Salvando dados...")
+            
+            # Save vector store
+            if hasattr(self, 'vector_db') and self.vector_db and len(self.vector_db.documents) > 0:
+                self.persistence.save_vector_store(self.vector_db)
+                
+            # Save chat history
+            if hasattr(self, 'chat_history') and self.chat_history and len(self.chat_history.history) > 0:
+                chat_history_file = os.path.join(APP_DATA_DIR, "chat_history.json")
+                self.chat_history.save_to_disk(chat_history_file)
+                
+        except Exception as e:
+            logger.error(f"Error saving data on close: {str(e)}")
+            QMessageBox.warning(self, "Erro ao salvar", f"Erro ao salvar dados: {str(e)}")
+            
+        # Accept the close event
+        event.accept()
 
 class SettingsView(QWidget):
     """Settings view for the application"""
@@ -527,111 +652,251 @@ class SettingsView(QWidget):
         self.parent = parent
         self.initUI()
         # Set white background for the settings view
-        self.setStyleSheet("background-color: white;")
-        
-    def initUI(self):
-        """Initialize the UI components"""
-        layout = QVBoxLayout(self)
-        
-        # Header with title on left and back button on right
-        header_layout = QHBoxLayout()
-        
-        # Title on left
-        settings_title = QLabel("Configurações")
-        settings_title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        settings_title.setStyleSheet("color: #4a6fc3; margin-bottom: 5px;")
-        header_layout.addWidget(settings_title, alignment=Qt.AlignmentFlag.AlignLeft)
-        
-        # Add stretching space to push button to the right
-        header_layout.addStretch()
-        
-        # Back button on right
-        self.back_button = QPushButton("Voltar")
-        self.back_button.setIcon(QIcon.fromTheme("go-previous"))
-        self.back_button.clicked.connect(self.go_back)
-        self.back_button.setFont(QFont("Segoe UI", 11))
-        self.back_button.setMinimumHeight(40)
-        self.back_button.setStyleSheet("""
-            QPushButton {
+        self.setStyleSheet("""
+            QWidget#settingsView {
+                background-color: white;
+            }
+            QScrollArea, QScrollArea > QWidget > QWidget {
+                background-color: white;
+            }
+            QWidget.card {
+                background-color: #f8f9fa;
+                border-radius: 8px;
+                border: 1px solid #e0e4e8;
+            }
+            QWidget.card:hover {
+                border: 1px solid #c0c4c8;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+            }
+            QPushButton.back-button {
                 background-color: #f0f2f5;
                 color: #515769;
                 border: 1px solid #e0e4e8;
                 padding: 8px 16px;
-                border-radius: 6px;
+                border-radius: 8px;
                 font-weight: bold;
             }
-            QPushButton:hover {
+            QPushButton.back-button:hover {
                 background-color: #e9ecf2;
+                border: 1px solid #d0d4d8;
             }
-            QPushButton:pressed {
-                background-color: #e0e4e8;
+            QPushButton.primary-button {
+                background-color: #4285f4;
+                color: white;
+                border: none;
+                padding: 10px 16px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton.primary-button:hover {
+                background-color: #3367d6;
+            }
+            QPushButton.primary-button:pressed {
+                background-color: #2a56c6;
+            }
+            QPushButton.danger-button {
+                background-color: #f44336;
+                color: white;
+                border: none;
+                padding: 10px 16px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton.danger-button:hover {
+                background-color: #e53935;
+            }
+            QPushButton.danger-button:pressed {
+                background-color: #d32f2f;
+            }
+            QLineEdit.api-input {
+                border: 1px solid #dadce0;
+                border-radius: 8px;
+                padding: 12px;
+                background-color: white;
+                color: #3c4043;
+                font-size: 14px;
+            }
+            QLineEdit.api-input:focus {
+                border: 2px solid #4285f4;
+                padding: 11px;
+            }
+            QLabel.section-title {
+                color: #202124;
+                font-size: 18px;
+                font-weight: bold;
+                margin-bottom: 4px;
+            }
+            QLabel.section-subtitle {
+                color: #5f6368;
+                font-size: 13px;
+                font-weight: normal;
+            }
+            QLabel.field-label {
+                color: #3c4043;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QLabel.version-label {
+                color: #80868b;
+                font-size: 12px;
             }
         """)
-        header_layout.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignRight)
+        
+    def initUI(self):
+        """Initialize the UI components"""
+        # Set object name for styling
+        self.setObjectName("settingsView")
+        
+        # Main layout with margins
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+        
+        # Header with title on left and back button on right
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 10)
+        
+        # Title on left with icon
+        title_layout = QVBoxLayout()
+        title_layout.setSpacing(2)
+        
+        settings_title = QLabel("Configurações")
+        settings_title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        settings_title.setStyleSheet("color: #202124; margin-bottom: 0px;")
+        title_layout.addWidget(settings_title)
+        
+        settings_subtitle = QLabel("Personalize sua experiência com o analisador de ATAS")
+        settings_subtitle.setFont(QFont("Segoe UI", 12))
+        settings_subtitle.setStyleSheet("color: #5f6368; font-weight: normal;")
+        title_layout.addWidget(settings_subtitle)
+        
+        header_layout.addLayout(title_layout)
+        
+        # Add stretching space to push button to the right
+        header_layout.addStretch()
+        
+        # Back button on right with icon
+        self.back_button = QPushButton(" Voltar")
+        self.back_button.setFont(QFont("Segoe UI", 11))
+        self.back_button.setProperty("class", "back-button")
+        self.back_button.setFixedSize(100, 36)
+        self.back_button.setIcon(QIcon.fromTheme("go-previous"))
+        self.back_button.clicked.connect(self.go_back)
+        header_layout.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
         
         layout.addLayout(header_layout)
-        
-        # Separator line
-        separator = QLabel()
-        separator.setFixedHeight(1)
-        separator.setStyleSheet("background-color: #e0e4e8; margin-top: 5px; margin-bottom: 20px;")
-        layout.addWidget(separator)
         
         # Create a scroll area for settings content
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        # Make scroll area take full height
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
         scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
         # Create a container widget for the scroll area
         settings_container = QWidget()
-        settings_container.setStyleSheet("background-color: white;")
+        settings_container.setObjectName("settingsContainer")
         settings_content_layout = QVBoxLayout(settings_container)
+        settings_content_layout.setContentsMargins(0, 0, 0, 0)
+        settings_content_layout.setSpacing(12)
         
-        # Add Reset Data section
-        reset_section = QVBoxLayout()
+        # API Key Card
+        api_card = QWidget()
+        api_card.setProperty("class", "card")
+        api_card_layout = QVBoxLayout(api_card)
+        api_card_layout.setContentsMargins(16, 16, 16, 16)
+        api_card_layout.setSpacing(8)
+        
+        # API Key section header
+        api_title = QLabel("Chave API OpenAI")
+        api_title.setProperty("class", "section-title")
+        api_card_layout.addWidget(api_title)
+        
+        api_info = QLabel("Configure sua chave de API da OpenAI para usar o aplicativo.")
+        api_info.setProperty("class", "section-subtitle")
+        api_info.setWordWrap(True)
+        api_card_layout.addWidget(api_info)
+        
+        # Separator line
+        api_separator = QFrame()
+        api_separator.setFrameShape(QFrame.Shape.HLine)
+        api_separator.setFrameShadow(QFrame.Shadow.Sunken)
+        api_separator.setStyleSheet("background-color: #e0e4e8; border: none; height: 1px; margin: 4px 0;")
+        api_card_layout.addWidget(api_separator)
+        
+        # API Key input field with label
+        api_key_label = QLabel("Chave de API:")
+        api_key_label.setProperty("class", "field-label")
+        api_card_layout.addWidget(api_key_label)
+        
+        self.api_key_input = QLineEdit()
+        self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.api_key_input.setProperty("class", "api-input")
+        self.api_key_input.setMinimumHeight(38)
+        self.api_key_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.api_key_input.setPlaceholderText("Digite sua chave API da OpenAI")
+        
+        # Load the API key if we have it
+        if self.parent and hasattr(self.parent, 'settings_manager'):
+            api_key = self.parent.settings_manager.get_api_key()
+            if api_key:
+                self.api_key_input.setText(api_key)
+                self.api_key_input.setPlaceholderText("*" * len(api_key))
+        
+        api_card_layout.addWidget(self.api_key_input)
+        
+        # Info text about API key
+        api_key_info = QLabel("Sua chave API é armazenada localmente e nunca é compartilhada.")
+        api_key_info.setStyleSheet("color: #80868b; font-size: 12px; font-style: italic;")
+        api_card_layout.addWidget(api_key_info)
+        
+        # Save API Key button
+        self.save_api_key_button = QPushButton("Salvar Chave API")
+        self.save_api_key_button.setProperty("class", "primary-button")
+        self.save_api_key_button.setFont(QFont("Segoe UI", 12))
+        self.save_api_key_button.setMinimumHeight(38)
+        self.save_api_key_button.clicked.connect(self.save_api_key)
+        api_card_layout.addWidget(self.save_api_key_button)
+        
+        # Add card to layout
+        settings_content_layout.addWidget(api_card)
+        
+        # Reset Data Card
+        reset_card = QWidget()
+        reset_card.setProperty("class", "card")
+        reset_card_layout = QVBoxLayout(reset_card)
+        reset_card_layout.setContentsMargins(16, 16, 16, 16)
+        reset_card_layout.setSpacing(8)
+        
+        # Reset section header
         reset_title = QLabel("Resetar Dados")
-        reset_title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        reset_title.setStyleSheet("color: #515769; margin-bottom: 15px; margin-top: 15px;")
-        reset_section.addWidget(reset_title)
+        reset_title.setProperty("class", "section-title")
+        reset_card_layout.addWidget(reset_title)
         
         reset_info = QLabel("Reset completo da base de documentos. Esta ação não pode ser desfeita.")
-        reset_info.setFont(QFont("Segoe UI", 12))
-        reset_info.setStyleSheet("color: #505050; margin-bottom: 30px;")
+        reset_info.setProperty("class", "section-subtitle")
         reset_info.setWordWrap(True)
-        reset_section.addWidget(reset_info)
+        reset_card_layout.addWidget(reset_info)
+        
+        # Separator line
+        reset_separator = QFrame()
+        reset_separator.setFrameShape(QFrame.Shape.HLine)
+        reset_separator.setFrameShadow(QFrame.Shadow.Sunken)
+        reset_separator.setStyleSheet("background-color: #e0e4e8; border: none; height: 1px; margin: 4px 0;")
+        reset_card_layout.addWidget(reset_separator)
+        
+        # Warning about reset
+        reset_warning = QLabel("⚠️ Todos os documentos e análises serão removidos permanentemente.")
+        reset_warning.setStyleSheet("color: #f44336; font-size: 13px; font-weight: bold;")
+        reset_warning.setWordWrap(True)
+        reset_card_layout.addWidget(reset_warning)
         
         # Reset button (full width)
         self.reset_docs_button = QPushButton("Resetar Documentos")
-        self.reset_docs_button.setIcon(QIcon.fromTheme("edit-delete"))
+        self.reset_docs_button.setProperty("class", "danger-button")
         self.reset_docs_button.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        self.reset_docs_button.setMinimumHeight(50)
-        # Remove maximum width to allow full width
-        # Make the button responsive to resizing
+        self.reset_docs_button.setMinimumHeight(38)
         self.reset_docs_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        # Use a distinct style for the reset button to indicate danger
-        self.reset_docs_button.setStyleSheet("""
-            QPushButton {
-                background-color: #f56565;
-                color: white;
-                border: none;
-                padding: 10px 18px;
-                border-radius: 6px;
-                font-weight: bold;
-                font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
-            }
-            QPushButton:hover {
-                background-color: #e53e3e;
-            }
-            QPushButton:pressed {
-                background-color: #c53030;
-            }
-            QPushButton:disabled {
-                background-color: #feb2b2;
-                color: #ffffff;
-            }
-        """)
         
         # Connect to the parent's reset_documents method
         if self.parent and hasattr(self.parent, 'reset_documents'):
@@ -640,28 +905,106 @@ class SettingsView(QWidget):
             self.reset_docs_button.setEnabled(False)
             logger.warning("Parent doesn't have reset_documents method, reset button disabled")
             
-        # Add button directly to layout for full width
-        reset_section.addWidget(self.reset_docs_button)
+        reset_card_layout.addWidget(self.reset_docs_button)
         
-        settings_content_layout.addLayout(reset_section)
+        # Add card to layout
+        settings_content_layout.addWidget(reset_card)
         
-        # Version information at the bottom
-        version_layout = QHBoxLayout()
-        app_version = QLabel(f"Versão: {APP_VERSION}")
-        app_version.setStyleSheet("color: #939aab; font-size: 10px;")
-        version_layout.addStretch()
-        version_layout.addWidget(app_version)
-        version_layout.addStretch()
+        # About Card
+        about_card = QWidget()
+        about_card.setProperty("class", "card")
+        about_card_layout = QVBoxLayout(about_card)
+        about_card_layout.setContentsMargins(16, 16, 16, 16)
+        about_card_layout.setSpacing(6)
         
-        # Add stretching space before version
-        settings_content_layout.addStretch()
-        settings_content_layout.addLayout(version_layout)
+        # About section header
+        about_title = QLabel("Sobre o Aplicativo")
+        about_title.setProperty("class", "section-title")
+        about_card_layout.addWidget(about_title)
+        
+        # App info with version
+        app_info = QLabel(f"iATAS - Analisador de ATAS v{APP_VERSION}")
+        app_info.setStyleSheet("color: #3c4043; font-size: 14px; font-weight: bold;")
+        about_card_layout.addWidget(app_info)
+        
+        # App description
+        app_description = QLabel("Uma ferramenta inteligente para análise e consulta de documentos de ATAS.")
+        app_description.setStyleSheet("color: #5f6368; font-size: 13px;")
+        app_description.setWordWrap(True)
+        about_card_layout.addWidget(app_description)
+        
+        # Copyright info
+        copyright_info = QLabel("© 2023-2024 Todos os direitos reservados")
+        copyright_info.setStyleSheet("color: #80868b; font-size: 12px; margin-top: 4px;")
+        about_card_layout.addWidget(copyright_info)
+        
+        # Add card to layout
+        settings_content_layout.addWidget(about_card)
+        
+        # No stretching space at the bottom to ensure all content is visible
         
         # Set the container widget as the scroll area's widget
         scroll_area.setWidget(settings_container)
         
-        # Add the scroll area to the main layout
-        layout.addWidget(scroll_area)
+        # Add the scroll area to the main layout with proper weight
+        layout.addWidget(scroll_area, 1)  # Give scroll area a stretch factor of 1 to fill available space
+        
+    def save_api_key(self):
+        """Save the API key from the input field"""
+        if not self.parent or not hasattr(self.parent, 'settings_manager'):
+            QMessageBox.warning(self, "Erro", "Não foi possível salvar a chave API.")
+            return
+            
+        api_key = self.api_key_input.text().strip()
+        
+        # Handle different cases for the API key
+        if not api_key:
+            # Ask for confirmation if clearing the API key
+            if self.parent.settings_manager.get_api_key():
+                confirm = QMessageBox.question(
+                    self,
+                    "Remover Chave API",
+                    "Tem certeza que deseja remover a chave API existente? Não será possível fazer perguntas sem uma chave API.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                
+                if confirm == QMessageBox.StandardButton.No:
+                    return
+            else:
+                QMessageBox.warning(self, "Aviso", "Por favor, insira uma chave API válida.")
+                return
+        else:
+            # Basic validation for OpenAI API key format (should start with "sk-")
+            if not api_key.startswith("sk-") or len(api_key) < 20:
+                confirm = QMessageBox.question(
+                    self,
+                    "Formato de Chave Suspeito",
+                    "A chave API fornecida não parece estar no formato correto da OpenAI (deve começar com 'sk-').\n\n"
+                    "Tem certeza que deseja salvar esta chave?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                
+                if confirm == QMessageBox.StandardButton.No:
+                    return
+        
+        # Save the API key
+        success = self.parent.settings_manager.set_api_key(api_key)
+        
+        if success:
+            # Show success message
+            QMessageBox.information(self, "Sucesso", "Chave API salva com sucesso!")
+            
+            # If we have a restart_ai_components method on the parent, call it
+            if hasattr(self.parent, 'restart_ai_components'):
+                self.parent.restart_ai_components()
+                
+            # Update button states in the main window
+            if hasattr(self.parent, '_ensure_buttons_enabled'):
+                self.parent._ensure_buttons_enabled()
+        else:
+            QMessageBox.warning(self, "Erro", "Não foi possível salvar a chave API. Verifique as permissões de arquivo.")
         
     def go_back(self):
         """Return to the main view"""
@@ -669,6 +1012,12 @@ class SettingsView(QWidget):
             # Switch to main view (index 1)
             self.parent.stacked_widget.setCurrentIndex(1)
             logger.info("Returning from settings to main view")
+            
+            # Force update of button states when returning to main view
+            if hasattr(self.parent, '_ensure_buttons_enabled'):
+                # Allow UI to update first
+                QTimer.singleShot(100, self.parent._ensure_buttons_enabled)
+                logger.info("Scheduled button state update after returning to main view")
 
 class InitialSetupView(QWidget):
     """Initial setup view for selecting document folder"""
@@ -770,6 +1119,12 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(640, 480)  # Reduced from 800x600 to 640x480 (VGA size)
         # Set initial window size to 800x600
         self.resize(800, 600)
+        # Center the window on screen
+        self.center_on_screen()
+        
+        # Initialize settings manager
+        self.settings_manager = SettingsManager(APP_DATA_DIR)
+        self.settings_manager.apply_settings()
         
         # Initialize persistence
         self.persistence = VectorStorePersistence(APP_DATA_DIR)
@@ -901,6 +1256,12 @@ class MainWindow(QMainWindow):
         try:
             _ = load_dotenv(find_dotenv())
             
+            # Get the API key from settings if we have one
+            api_key = self.settings_manager.get_api_key() if hasattr(self, 'settings_manager') else None
+            if api_key:
+                os.environ["OPENAI_API_KEY"] = api_key
+                logger.info("Using API key from settings")
+            
             # Initialize the embedder
             self.embedder = OpenAIEmbedder()
             
@@ -934,6 +1295,74 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Erro de Inicialização", 
                               f"Erro ao inicializar componentes: {str(e)}\n"
                               "Verifique se o arquivo .env está configurado corretamente.")
+                              
+    def restart_ai_components(self):
+        """Restart AI components after settings change"""
+        try:
+            logger.info("Restarting AI components")
+            
+            # Apply settings to environment
+            if hasattr(self, 'settings_manager'):
+                self.settings_manager.apply_settings()
+            
+            # Validate API key format before continuing
+            api_key = self.settings_manager.get_api_key() if hasattr(self, 'settings_manager') else None
+            if api_key:
+                # Basic validation for OpenAI API key format (should start with "sk-")
+                if not api_key.startswith("sk-") or len(api_key) < 20:
+                    logger.warning("API key does not appear to be in the correct format")
+                    QMessageBox.warning(
+                        self,
+                        "Chave API Suspeita",
+                        "A chave API fornecida não parece estar no formato correto esperado (sk-...).\n\n"
+                        "Se você está tendo problemas para fazer perguntas, verifique se a chave está correta.",
+                        QMessageBox.StandardButton.Ok
+                    )
+            
+            # Reinitialize the components
+            self._init_ai_components()
+            
+            # Update button states directly
+            self._ensure_buttons_enabled()
+            
+            # Update style to make sure button appearance changes
+            if hasattr(self, 'ask_button'):
+                self.ask_button.setStyleSheet("")
+                QApplication.processEvents()
+                # Apply original style from _apply_styles
+                self.ask_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #5c85d6;
+                        color: white;
+                        border: none;
+                        padding: 10px 18px;
+                        border-radius: 6px;
+                        font-weight: bold;
+                        font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
+                    }
+                    QPushButton:hover {
+                        background-color: #4a6fc3;
+                    }
+                    QPushButton:pressed {
+                        background-color: #3a5fb3;
+                    }
+                """)
+            
+            # Show a success message
+            self.status_bar.showMessage("Componentes de IA reiniciados com sucesso", 3000)
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error restarting AI components: {str(e)}")
+            
+            # Display user-friendly error
+            if "api_key" in str(e).lower() or "authentication" in str(e).lower():
+                error_msg = "Erro ao aplicar a chave API. Verifique se a chave é válida e tente novamente."
+            else:
+                error_msg = f"Erro ao reiniciar componentes: {str(e)}"
+                
+            QMessageBox.critical(self, "Erro", error_msg)
+            return False
 
     def _create_ui_components(self, layout):
         """Create and arrange UI components"""
@@ -1281,6 +1710,38 @@ class MainWindow(QMainWindow):
                 border-radius: 6px;
                 font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
             }
+            /* Fix for dialog backgrounds - exclude buttons */
+            QDialog {
+                background-color: white;
+            }
+            QDialog QLabel, QDialog QTextEdit, QDialog QLineEdit, QDialog QComboBox, 
+            QDialog QSpinBox, QDialog QCheckBox, QDialog QRadioButton {
+                background-color: white;
+            }
+            /* Specific styling for dialog buttons */
+            QDialog QPushButton, QMessageBox QPushButton,
+            QPushButton[text="OK"], QPushButton[text="Cancel"], QPushButton[text="Yes"], QPushButton[text="No"],
+            QPushButton[text="Open"], QPushButton[text="Save"], QPushButton[text="Cancelar"], QPushButton[text="Sim"], 
+            QPushButton[text="Não"], QPushButton[text="Abrir"], QPushButton[text="Salvar"] {
+                background-color: #5c85d6;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            /* Make sure message box and dialog buttons have distinct colors */
+            QMessageBox QPushButton {
+                background-color: #5c85d6 !important;
+                color: white !important;
+            }
+            /* Specific styling for Yes/No buttons in confirmation dialogs */
+            QMessageBox QPushButton[text="Yes"], QMessageBox QPushButton[text="No"],
+            QMessageBox QPushButton[text="Sim"], QMessageBox QPushButton[text="Não"] {
+                min-width: 80px;
+                background-color: #5c85d6 !important;
+                color: white !important;
+            }
             QStatusBar {
                 background-color: #e9ecf2;
                 color: #515769;
@@ -1597,10 +2058,17 @@ class MainWindow(QMainWindow):
         """Handle an error message"""
         logging.error(f"Error occurred: {error_message}")
         
+        # Check if this is an OpenAI API key error
+        if "401" in error_message and "invalid_api_key" in error_message:
+            friendly_message = "Sua chave API OpenAI parece ser inválida. Por favor, acesse as configurações e verifique se a chave foi digitada corretamente."
+            self.status_bar.showMessage("Erro: Chave API inválida", 5000)
+        else:
+            friendly_message = f"Erro: {error_message}"
+        
         # Update response area with error
         self.response_output.clear()
         self.response_output.setTextColor(QColor("#e53e3e"))
-        self.response_output.append(f"Erro: {error_message}")
+        self.response_output.append(friendly_message)
         
         # Find and update the temporary entry with the error message
         if self.chat_history.history:
@@ -1608,7 +2076,7 @@ class MainWindow(QMainWindow):
             last_entry = self.chat_history.history[-1]
             if "⏳ Processando sua pergunta..." in last_entry["answer"]:
                 # Replace the placeholder with the error message
-                error_html = f'<span style="color: #e53e3e;">Erro: {error_message}</span>'
+                error_html = f'<span style="color: #e53e3e;">{friendly_message}</span>'
                 self.chat_history.history[-1]["answer"] = error_html
                 
                 # Update the history view
@@ -1616,12 +2084,35 @@ class MainWindow(QMainWindow):
         
         # Reset UI state
         self.ask_button.setEnabled(True)
-        self.status_bar.showMessage(f"Erro: {error_message}", 5000)
+        self.status_bar.showMessage(friendly_message, 5000)
+        
+        # If this is an API key error, suggest going to settings
+        if "401" in error_message and "invalid_api_key" in error_message:
+            QMessageBox.warning(
+                self, 
+                "Chave API Inválida", 
+                "Sua chave API OpenAI parece ser inválida.\n\n"
+                "Por favor, acesse as configurações e verifique se a chave foi digitada corretamente.",
+                QMessageBox.StandardButton.Ok
+            )
 
     def load_documents(self):
         """Load documents from a selected folder"""
         try:
-            # First let the user select a documents folder, just like in the initial setup
+            # First ask user if they want to reset existing documents
+            if hasattr(self, 'vector_db') and self.vector_db and len(self.vector_db.documents) > 0:
+                confirm = QMessageBox.question(
+                    self,
+                    "Resetar Documentos Existentes",
+                    "Carregar novos documentos irá substituir todos os documentos atuais. Continuar?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                
+                if confirm == QMessageBox.StandardButton.No:
+                    return
+            
+            # Let the user select a documents folder
             folder = QFileDialog.getExistingDirectory(
                 self,
                 "Selecionar Pasta de Documentos",
@@ -1636,7 +2127,7 @@ class MainWindow(QMainWindow):
             # Reset documents before processing the new folder
             logger.info("Resetting existing documents before processing new folder")
             
-            # Clear the vector store in memory without confirmation dialog
+            # Clear the vector store in memory
             self.vector_db.documents = []
             self.vector_db.vectors = []
             self.vector_db.metadatas = []
@@ -1719,7 +2210,9 @@ class MainWindow(QMainWindow):
         """Handle successful document loading"""
         self.progress_dialog.close()
         self.load_docs_button.setEnabled(True)
-        self.ask_button.setEnabled(True)
+        
+        # Check for API key
+        has_api_key = hasattr(self, 'settings_manager') and self.settings_manager.get_api_key() != ""
         
         # Count unique file sources in metadata instead of total chunks
         sources = set()
@@ -1738,10 +2231,24 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Sucesso", f"Documentos carregados com sucesso! ({file_count} arquivos, {chunk_count} fragmentos)")
         self.status_bar.showMessage("Documentos carregados com sucesso!", 5000)
         
-        # Enable chat functionality
-        self.ask_button.setEnabled(True)
-        self.question_input.setEnabled(True)
-        self.question_input.setPlaceholderText("Digite sua pergunta sobre os documentos aqui...")
+        # Enable chat functionality only if we have API key
+        if has_api_key:
+            self.ask_button.setEnabled(True)
+            self.question_input.setEnabled(True)
+            self.question_input.setPlaceholderText("Digite sua pergunta sobre os documentos aqui...")
+        else:
+            self.ask_button.setEnabled(False)
+            self.question_input.setEnabled(True)
+            self.question_input.setPlaceholderText("Configure sua chave API OpenAI nas configurações para fazer perguntas...")
+            self.ask_button.setToolTip("Chave API OpenAI não configurada. Acesse as configurações.")
+            
+            # Show a message about missing API key
+            QMessageBox.warning(
+                self, 
+                "Chave API Necessária", 
+                "Seus documentos foram carregados, mas uma chave API OpenAI é necessária para fazer perguntas.\n\n"
+                "Por favor, configure sua chave API nas configurações do aplicativo."
+            )
         
         # Save the vector store to disk
         self.persistence.save_vector_store(self.vector_db)
@@ -1778,6 +2285,24 @@ class MainWindow(QMainWindow):
             
         # Accept the close event
         event.accept()
+        
+    def center_on_screen(self):
+        """Center the main window on the screen"""
+        # Get the screen geometry
+        screen = QApplication.primaryScreen()
+        screen_geometry = screen.availableGeometry()
+        
+        # Get the window size
+        window_size = self.frameGeometry()
+        
+        # Calculate the center point
+        center_point = screen_geometry.center()
+        
+        # Move the window rectangle's center point to the screen's center point
+        window_size.moveCenter(center_point)
+        
+        # Move the window to the top-left point of the centered rectangle
+        self.move(window_size.topLeft())
 
     def update_history_view(self):
         """Update the history view with current chat history"""
@@ -1868,26 +2393,77 @@ class MainWindow(QMainWindow):
     def show_settings(self):
         """Show the settings view"""
         try:
+            # Log current state
             logger.info(f"Attempting to show settings view, current index: {self.stacked_widget.currentIndex()}")
             logger.info(f"Stacked widget count: {self.stacked_widget.count()}")
+            
+            # Get widget information for debugging
             for i in range(self.stacked_widget.count()):
                 widget = self.stacked_widget.widget(i)
                 logger.info(f"Widget at index {i}: {type(widget).__name__}")
             
-            # Switch to settings view (index 2)
-            self.stacked_widget.setCurrentIndex(2)
-            logger.info(f"Settings view activated, new index: {self.stacked_widget.currentIndex()}")
+            # Switch to settings view (should be index 2)
+            # If we have 3 widgets, it's at index 2 (0-based indexing)
+            if self.stacked_widget.count() >= 3:
+                self.stacked_widget.setCurrentIndex(2)
+                logger.info(f"Settings view activated, new index: {self.stacked_widget.currentIndex()}")
+            else:
+                logger.error(f"Settings view not found, widget count: {self.stacked_widget.count()}")
+                raise ValueError(f"Settings view not found, widget count: {self.stacked_widget.count()}")
         except Exception as e:
             logger.error(f"Error showing settings: {str(e)}")
             QMessageBox.critical(self, "Erro", f"Não foi possível exibir as configurações: {str(e)}")
 
     def _ensure_buttons_enabled(self):
         """Force button state update if documents are loaded"""
-        if hasattr(self, 'vector_db') and hasattr(self.vector_db, 'documents') and len(self.vector_db.documents) > 0:
-            logger.info("Ensuring buttons are enabled because documents exist")
-            self.ask_button.setEnabled(True)
-            self.question_input.setEnabled(True)
-            self.question_input.setPlaceholderText("Digite sua pergunta sobre os documentos aqui...")
+        has_documents = hasattr(self, 'vector_db') and hasattr(self.vector_db, 'documents') and len(self.vector_db.documents) > 0
+        has_api_key = hasattr(self, 'settings_manager') and self.settings_manager.get_api_key() != ""
+        
+        logger.info(f"Ensuring buttons are enabled: has_documents={has_documents}, has_api_key={has_api_key}")
+        
+        # Always enable the load_docs_button and settings_button
+        self.load_docs_button.setEnabled(True)
+        if hasattr(self, 'settings_button'):
+            self.settings_button.setEnabled(True)
+            
+        if has_documents:
+            # Only enable asking questions if we have both documents and an API key
+            if has_api_key:
+                # Update button appearance first
+                self.ask_button.setStyleSheet("")
+                # Force button to be enabled
+                self.ask_button.setEnabled(True)
+                self.question_input.setEnabled(True)
+                self.question_input.setPlaceholderText("Digite sua pergunta sobre os documentos aqui...")
+                self.ask_button.setToolTip("")  # Clear any previous tooltip
+                
+                # Log that we're enabling the button
+                logger.info("Enabling 'Perguntar' button as both documents and API key are available")
+                
+                # Force GUI update
+                QApplication.processEvents()
+            else:
+                self.ask_button.setEnabled(False)
+                self.question_input.setEnabled(True)
+                self.question_input.setPlaceholderText("Configure sua chave API OpenAI nas configurações para fazer perguntas...")
+                # Give the ask button a different style to indicate it's disabled due to missing API key
+                self.ask_button.setToolTip("Chave API OpenAI não configurada. Acesse as configurações.")
+                self.ask_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #d8dde5;
+                        color: #939aab;
+                        border: none;
+                        padding: 10px 18px;
+                        border-radius: 6px;
+                        font-weight: bold;
+                    }
+                """)
+        else:
+            # No documents loaded
+            self.ask_button.setEnabled(False)
+            self.question_input.setEnabled(False)
+            self.question_input.setPlaceholderText("Carregue documentos para começar...")
+            self.ask_button.setToolTip("Carregue documentos para poder fazer perguntas.")
 
     def reset_documents(self):
         """Reset the document store"""
