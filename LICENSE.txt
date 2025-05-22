@@ -1,0 +1,32 @@
+LICENÇA DE USO - iATAS (Analisador de ATAS)
+
+Copyright (c) 2024-2025 iATAS Team
+
+1. PERMISSÃO DE USO
+
+Este software é licenciado, não vendido. Esta licença concede a você o direito não exclusivo de instalar e utilizar o software iATAS.
+
+2. RESTRIÇÕES
+
+Você não pode:
+- Modificar, descompilar, fazer engenharia reversa ou desmontar o software
+- Alugar, arrendar, emprestar ou transferir o software
+- Remover ou alterar quaisquer avisos de direitos autorais
+
+3. PROPRIEDADE
+
+O software e toda a documentação associada são e permanecerão propriedade exclusiva do iATAS Team. O software é protegido por leis de direitos autorais e tratados internacionais.
+
+4. ISENÇÃO DE GARANTIAS
+
+O SOFTWARE É FORNECIDO "COMO ESTÁ", SEM GARANTIA DE QUALQUER TIPO, EXPRESSA OU IMPLÍCITA, INCLUINDO, MAS NÃO SE LIMITANDO ÀS GARANTIAS DE COMERCIALIZAÇÃO, ADEQUAÇÃO A UM DETERMINADO FIM E NÃO VIOLAÇÃO.
+
+5. LIMITAÇÃO DE RESPONSABILIDADE
+
+EM NENHUMA CIRCUNSTÂNCIA OS AUTORES OU DETENTORES DE DIREITOS AUTORAIS SERÃO RESPONSÁVEIS POR QUALQUER RECLAMAÇÃO, DANOS OU OUTRA RESPONSABILIDADE, SEJA EM AÇÃO DE CONTRATO, DELITO OU DE OUTRA FORMA, DECORRENTE DE, FORA DE OU EM CONEXÃO COM O SOFTWARE OU O USO OU OUTRAS NEGOCIAÇÕES NO SOFTWARE.
+
+6. TÉRMINO
+
+Esta licença é válida até ser rescindida. Seus direitos sob esta licença serão automaticamente rescindidos sem aviso prévio se você violar qualquer termo desta licença.
+
+Ao instalar ou usar este software, você concorda com os termos desta licença. 

@@ -1021,7 +1021,7 @@ class SettingsView(QWidget):
 
 class InitialSetupView(QWidget):
     """Initial setup view for selecting document folder"""
-    setup_complete = pyqtSignal(str)  # Signal emitted when setup is complete with folder path
+    setup_complete = pyqtSignal(str, str)  # Signal emitted with folder path and API key
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1068,6 +1068,49 @@ class InitialSetupView(QWidget):
         self.folder_label.setStyleSheet("color: #666; margin: 10px;")
         self.folder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.folder_label)
+        
+        # API Key section
+        api_key_section = QWidget()
+        api_key_layout = QVBoxLayout(api_key_section)
+        
+        # API Key label
+        api_key_title = QLabel("Chave API OpenAI")
+        api_key_title.setStyleSheet("font-size: 16px; font-weight: bold; margin-top: 20px;")
+        api_key_layout.addWidget(api_key_title, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        # API Key instructions
+        api_key_instructions = QLabel(
+            "A chave API da OpenAI é necessária para analisar os documentos.\n"
+            "A chave API é armazenada localmente e nunca é compartilhada."
+        )
+        api_key_instructions.setStyleSheet("font-size: 14px; margin: 5px 20px;")
+        api_key_instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        api_key_instructions.setWordWrap(True)
+        api_key_layout.addWidget(api_key_instructions)
+        
+        # API Key input
+        self.api_key_input = QLineEdit()
+        self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.api_key_input.setPlaceholderText("Digite sua chave API OpenAI (começa com 'sk-')")
+        self.api_key_input.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #dadce0;
+                border-radius: 8px;
+                padding: 12px;
+                background-color: white;
+                color: #3c4043;
+                font-size: 14px;
+                margin: 10px 20px;
+            }
+            QLineEdit:focus {
+                border: 2px solid #4285f4;
+                padding: 11px;
+            }
+        """)
+        api_key_layout.addWidget(self.api_key_input)
+        
+        # Add API Key section to main layout
+        layout.addWidget(api_key_section)
 
         # Continue button (initially disabled)
         self.continue_btn = QPushButton("Continuar")
@@ -1094,6 +1137,9 @@ class InitialSetupView(QWidget):
         # Add stretch to center everything
         layout.addStretch()
         self.setLayout(layout)
+        
+        # Connect API key input to validation
+        self.api_key_input.textChanged.connect(self.validate_inputs)
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(
@@ -1104,12 +1150,35 @@ class InitialSetupView(QWidget):
         )
         if folder:
             self.folder_label.setText(f"Pasta selecionada: {folder}")
-            self.continue_btn.setEnabled(True)
             self.selected_folder = folder
+            self.validate_inputs()
+
+    def validate_inputs(self):
+        # Enable continue button only if both folder and API key are provided
+        has_folder = hasattr(self, 'selected_folder')
+        has_api_key = bool(self.api_key_input.text().strip())
+        
+        self.continue_btn.setEnabled(has_folder and has_api_key)
 
     def complete_setup(self):
         if hasattr(self, 'selected_folder'):
-            self.setup_complete.emit(self.selected_folder)
+            api_key = self.api_key_input.text().strip()
+            # Basic validation for OpenAI API key format (should start with "sk-")
+            if not api_key.startswith("sk-"):
+                confirm = QMessageBox.question(
+                    self,
+                    "Formato de Chave Suspeito",
+                    "A chave API fornecida não parece estar no formato correto da OpenAI (deve começar com 'sk-').\n\n"
+                    "Tem certeza que deseja continuar com esta chave?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                
+                if confirm == QMessageBox.StandardButton.No:
+                    return
+            
+            # Emit signal with both folder path and API key
+            self.setup_complete.emit(self.selected_folder, api_key)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -1202,11 +1271,20 @@ class MainWindow(QMainWindow):
             logger.error(f"Error checking for existing documents: {str(e)}")
             return False
             
-    def on_setup_complete(self, folder_path):
+    def on_setup_complete(self, folder_path, api_key):
         """Handle completion of initial setup"""
         try:
             # Store the selected folder path
             self.docs_folder = folder_path
+            
+            # Save the API key
+            if api_key:
+                logger.info("Saving API key from initial setup")
+                self.settings_manager.set_api_key(api_key)
+                # Apply API key to environment immediately
+                os.environ["OPENAI_API_KEY"] = api_key
+                # Restart AI components with the new API key
+                self.restart_ai_components()
             
             # Disable buttons during processing
             self.ask_button.setEnabled(False)
@@ -2032,7 +2110,6 @@ class MainWindow(QMainWindow):
         result = re.sub(r'_([^_]+)_', r'<em>\1</em>', result)
         
         return result
-
     def _clean_ansi_and_formatting(self, text):
         """Remove ANSI color codes, box drawing characters and other formatting artifacts"""
         import re
@@ -2789,3 +2866,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
