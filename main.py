@@ -7,8 +7,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QFileDialog, QMessageBox, QProgressDialog,
                             QStatusBar, QSplashScreen, QScrollArea, QFrame,
                             QStackedWidget, QSizePolicy, QLineEdit)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QDateTime, QSize
-from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor, QPainter
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QDateTime, QSize, QRect
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QColor, QPainter, QLinearGradient, QPainterPath
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from dotenv import load_dotenv, find_dotenv, set_key
@@ -1031,7 +1031,7 @@ class InitialSetupView(QWidget):
         layout = QVBoxLayout()
         
         # Welcome message
-        welcome_label = QLabel("Welcome to iATAS - Analisador de ATAS")
+        welcome_label = QLabel("Bem-vindo ao iATAS - Analisador de ATAS")
         welcome_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px;")
         welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(welcome_label)
@@ -1720,8 +1720,8 @@ class MainWindow(QMainWindow):
             }
             /* Specific styling for dialog buttons */
             QDialog QPushButton, QMessageBox QPushButton,
-            QPushButton[text="OK"], QPushButton[text="Cancel"], QPushButton[text="Yes"], QPushButton[text="No"],
-            QPushButton[text="Open"], QPushButton[text="Save"], QPushButton[text="Cancelar"], QPushButton[text="Sim"], 
+            QPushButton[text="OK"], QPushButton[text="Cancelar"], QPushButton[text="Sim"], QPushButton[text="Não"],
+            QPushButton[text="Abrir"], QPushButton[text="Salvar"], QPushButton[text="Cancelar"], QPushButton[text="Sim"], 
             QPushButton[text="Não"], QPushButton[text="Abrir"], QPushButton[text="Salvar"] {
                 background-color: #5c85d6;
                 color: white;
@@ -1736,7 +1736,7 @@ class MainWindow(QMainWindow):
                 color: white !important;
             }
             /* Specific styling for Yes/No buttons in confirmation dialogs */
-            QMessageBox QPushButton[text="Yes"], QMessageBox QPushButton[text="No"],
+            QMessageBox QPushButton[text="Sim"], QMessageBox QPushButton[text="Não"],
             QMessageBox QPushButton[text="Sim"], QMessageBox QPushButton[text="Não"] {
                 min-width: 80px;
                 background-color: #5c85d6 !important;
@@ -2718,11 +2718,65 @@ def main():
     app.setStyle("Fusion")
     
     # Show splash screen
-    splash_pix = QPixmap('settings-white.png')
+    splash_pix = QPixmap(500, 300)  # Create a 500x300 pixmap for the splash screen
+    splash_pix.fill(QColor("#ffffff"))  # Fill with white background
+
+    # Create a painter to draw on the pixmap
+    painter = QPainter(splash_pix)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+
+    # Create a gradient background
+    gradient = QLinearGradient(0, 0, 0, splash_pix.height())
+    gradient.setColorAt(0.0, QColor("#4a6fc3"))  # Dark blue at top
+    gradient.setColorAt(1.0, QColor("#5c85d6"))  # Lighter blue at bottom
+    painter.fillRect(0, 0, splash_pix.width(), splash_pix.height(), gradient)
+
+    # Draw a modern decorative element - a semi-transparent white curve
+    path = QPainterPath()
+    path.moveTo(0, splash_pix.height() * 0.7)
+    path.cubicTo(
+        splash_pix.width() * 0.3, splash_pix.height() * 0.9, 
+        splash_pix.width() * 0.6, splash_pix.height() * 0.5, 
+        splash_pix.width(), splash_pix.height() * 0.8
+    )
+    path.lineTo(splash_pix.width(), splash_pix.height())
+    path.lineTo(0, splash_pix.height())
+    path.closeSubpath()
+    painter.fillPath(path, QColor(255, 255, 255, 60))  # Semi-transparent white
+
+    # Draw app title
+    title_font = QFont("Segoe UI", 24, QFont.Weight.Bold)
+    painter.setFont(title_font)
+    painter.setPen(QColor("#ffffff"))
+    painter.drawText(QRect(0, 70, splash_pix.width(), 50), Qt.AlignmentFlag.AlignCenter, APP_TITLE)
+
+    # Draw app version
+    version_font = QFont("Segoe UI", 12)
+    painter.setFont(version_font)
+    painter.setPen(QColor("#e0e4e8"))
+    painter.drawText(QRect(0, 120, splash_pix.width(), 30), Qt.AlignmentFlag.AlignCenter, f"v{APP_VERSION}")
+
+    # Draw loading message
+    loading_font = QFont("Segoe UI", 10, QFont.Weight.Normal)
+    painter.setFont(loading_font)
+    painter.setPen(QColor("#ffffff"))
+    painter.drawText(QRect(0, splash_pix.height() - 40, splash_pix.width(), 30), 
+                    Qt.AlignmentFlag.AlignCenter, "Inicializando o sistema...")
+
+    # End painting
+    painter.end()
+
+    # Create and display the splash screen
     splash = QSplashScreen(splash_pix, Qt.WindowType.WindowStaysOnTopHint)
     splash.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
     splash.show()
     app.processEvents()
+
+    # Add a small delay to show the splash screen longer (500ms)
+    start_time = time.time()
+    while time.time() - start_time < 0.5:
+        app.processEvents()
     
     # Create and show main window
     window = MainWindow()
