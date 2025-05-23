@@ -1033,6 +1033,7 @@ class InitialSetupView(QWidget):
             QWidget {
                 background-color: white;
                 font-family: 'Segoe UI', 'Roboto', 'Open Sans', sans-serif;
+                border: none;
             }
         """)
         
@@ -1052,6 +1053,7 @@ class InitialSetupView(QWidget):
             QWidget {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4a6fc3, stop:1 #5c85d6);
                 border-radius: 6px;
+                border: none;
             }
         """)
         
@@ -1065,6 +1067,7 @@ class InitialSetupView(QWidget):
             color: white;
             font-size: 18px;
             font-weight: bold;
+            border: none;
         """)
         header_layout.addWidget(app_title)
         
@@ -1073,6 +1076,7 @@ class InitialSetupView(QWidget):
         app_subtitle.setStyleSheet("""
             color: rgba(255, 255, 255, 0.9);
             font-size: 12px;
+            border: none;
         """)
         header_layout.addWidget(app_subtitle)
         
@@ -1084,6 +1088,7 @@ class InitialSetupView(QWidget):
         content_container.setStyleSheet("""
             QWidget {
                 background-color: white;
+                border: none;
             }
         """)
         
@@ -1098,11 +1103,7 @@ class InitialSetupView(QWidget):
             QWidget {
                 background-color: #f8f9fa;
                 border-radius: 6px;
-                border: 1px solid #e0e4e8;
-            }
-            QWidget:hover {
-                border: 1px solid #c0c4c8;
-                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+                border: none;
             }
         """)
         
@@ -1115,7 +1116,11 @@ class InitialSetupView(QWidget):
         folder_title_layout.setSpacing(8)
         
         folder_icon_label = QLabel("📁")
-        folder_icon_label.setStyleSheet("font-size: 14px;")  # Smaller icon
+        folder_icon_label.setStyleSheet("""
+            font-size: 14px;
+            color: #202124;
+            border: none;
+        """)
         folder_title_layout.addWidget(folder_icon_label)
         
         folder_title = QLabel("Selecione a Pasta de Documentos")
@@ -1189,11 +1194,7 @@ class InitialSetupView(QWidget):
             QWidget {
                 background-color: #f8f9fa;
                 border-radius: 6px;
-                border: 1px solid #e0e4e8;
-            }
-            QWidget:hover {
-                border: 1px solid #c0c4c8;
-                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+                border: none;
             }
         """)
         
@@ -1206,7 +1207,11 @@ class InitialSetupView(QWidget):
         api_title_layout.setSpacing(8)
         
         api_icon_label = QLabel("🔑")
-        api_icon_label.setStyleSheet("font-size: 14px;")  # Smaller icon
+        api_icon_label.setStyleSheet("""
+            font-size: 14px;
+            color: #202124;
+            border: none;
+        """)
         api_title_layout.addWidget(api_icon_label)
         
         api_title = QLabel("Chave API OpenAI")
@@ -1214,6 +1219,7 @@ class InitialSetupView(QWidget):
             font-size: 13px;
             font-weight: bold;
             color: #202124;
+            border: none;
         """)
         api_title_layout.addWidget(api_title)
         api_title_layout.addStretch()
@@ -1225,6 +1231,7 @@ class InitialSetupView(QWidget):
         api_description.setStyleSheet("""
             color: #5f6368;
             font-size: 11px;
+            border: none;
         """)
         api_description.setWordWrap(True)
         api_layout.addWidget(api_description)
@@ -1249,6 +1256,16 @@ class InitialSetupView(QWidget):
         """)
         api_layout.addWidget(self.api_key_input)
         
+        # Add info text - more compact
+        api_info = QLabel("Obtenha em: platform.openai.com/api-keys")
+        api_info.setStyleSheet("""
+            color: #80868b;
+            font-size: 10px;
+            font-style: italic;
+            border: none;
+        """)
+        api_info.setOpenExternalLinks(True)
+        api_layout.addWidget(api_info)
         
         content_layout.addWidget(api_card)
         
@@ -1267,6 +1284,7 @@ class InitialSetupView(QWidget):
         self.folder_status.setStyleSheet("""
             color: #9AA0A6;
             font-size: 11px;
+            border: none;
         """)
         status_layout.addWidget(self.folder_status)
         
@@ -1275,6 +1293,7 @@ class InitialSetupView(QWidget):
         self.api_status.setStyleSheet("""
             color: #9AA0A6;
             font-size: 11px;
+            border: none;
         """)
         status_layout.addWidget(self.api_status)
         
