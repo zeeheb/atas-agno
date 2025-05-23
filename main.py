@@ -1607,7 +1607,10 @@ class MainWindow(QMainWindow):
                 markdown=False,
                 add_history_to_messages=True,
                 instructions='''
-                    "Reformulação Interna (não visível ao usuário):
+                    "
+                    Você é um assistente especializado em analisar ATAS DE REUNIÕES (.pdf, .docx, .doc, .txt) de empresas de contabilidade. 
+                    Sua função é responder exclusivamente com base no conteúdo desses documentos, seguindo estas regras:
+                    Reformulação Interna (não visível ao usuário):
                     Se a pergunta for ampla, ajuste-a para focar em:
                     Palavras-chave (ex: "demonstrações financeiras", "quórum", "deliberação").
                     Datas (ex: "ata de 05/2024").
