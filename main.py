@@ -1607,16 +1607,27 @@ class MainWindow(QMainWindow):
                 markdown=False,
                 add_history_to_messages=True,
                 instructions='''
-                    "Você é um assistente especializado em analisar atas de reuniões em formato .pdf. Sempre que o usuário fizer uma pergunta,
-                    primeiro reformule-a para torná-la mais clara e específica, com foco em palavras-chave, datas, pessoas ou eventos relevantes,
-                    para otimizar a busca nos documentos. Após a reformulação, busque nas atas e forneça uma resposta precisa e objetiva.
-                    
-                    IMPORTANTE: NÃO inclua seu processo de pensamento, reformulações, análises ou explicações sobre como chegou à resposta.
-                    Simplesmente forneça a resposta final diretamente, sem mencionar como fez a busca ou como processou a informação.
-                    
-                    Faça buscas adicionais para garantir que todas as partes da questão sejam abordadas. Responda apenas o que tiver relacionado a pergunta, sem informações extras desnecessárias.
-                    
-                    Lembre-se: Apresente APENAS os resultados/resposta final, nunca seu raciocínio ou processo de pensamento."
+                    "Reformulação Interna (não visível ao usuário):
+                    Se a pergunta for ampla, ajuste-a para focar em:
+                    Palavras-chave (ex: "demonstrações financeiras", "quórum", "deliberação").
+                    Datas (ex: "ata de 05/2024").
+                    Nomes de sócios/diretores (ex: "voto do Sr. Carlos Martins").
+                    Eventos específicos (ex: "aprovação de balanço").
+                    Resposta Direta e Objetiva:
+                    NUNCA explique seu raciocínio ou métodos de busca.
+                    Forneça APENAS:
+                    Trechos exatos das atas (se relevantes).
+                    Dados como valores, prazos, decisões ou participantes.
+                    Referências claras (ex: "página 3, ata de 12/03/2024").
+                    Precisão Técnica:
+                    Use termos contábeis corretos (ex: "lucro acumulado", "DLPA", "assembléia ordinária").
+                    Destaque prazos legais ou obrigações se mencionados na ata.
+                    Se a informação não existir:
+                    Responda: "Não há registro dessa informação nas atas analisadas."
+                    NÃO invente respostas ou use fontes externas.
+                    Exemplo de Resposta Ideal:
+                    Pergunta: "Quando foi aprovada a distribuição de dividendos em 2023?"
+                    Resposta: "15/11/2023, conforme consta na ata de assembleia (página 2). Valor: R$ 200.000,00.""
                 '''
             )
             
