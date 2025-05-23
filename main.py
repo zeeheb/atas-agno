@@ -22,6 +22,7 @@ import uuid
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import re
+import docx  # Import for processing .docx files
 
 # Import our persistence module
 from persistence import VectorStorePersistence
@@ -395,7 +396,7 @@ class DocumentLoaderThread(QThread):
         try:
             # Get all PDF and TXT files in the folder
             files = []
-            for ext in ['*.pdf', '*.txt']:
+            for ext in ['*.pdf', '*.txt', '*.docx', '*.doc']:
                 files.extend(Path(self.folder_path).glob(ext))
             
             if not files:
@@ -419,10 +420,18 @@ class DocumentLoaderThread(QThread):
                     self.status_update.emit(f"Processando {file_path.name}...")
                     
                     # Extract text based on file type
-                    if file_path.suffix.lower() == '.pdf':
+                    file_suffix = file_path.suffix.lower()
+                    if file_suffix == '.pdf':
                         text = self.extract_text_from_pdf(str(file_path))
-                    else:  # .txt
+                    elif file_suffix in ['.docx', '.doc']:
+                        text = self.extract_text_from_word(str(file_path))
+                    elif file_suffix == '.txt':
                         text = self.extract_text_from_txt(str(file_path))
+                    else:
+                        # Skip files with unsupported formats
+                        self.status_update.emit(f"Aviso: Formato não suportado: {file_path.name}")
+                        logger.warning(f"Skipping unsupported file format: {file_path}")
+                        continue
 
                     if not text:
                         self.status_update.emit(f"Aviso: Nenhum texto extraído de {file_path.name}")
@@ -517,6 +526,39 @@ class DocumentLoaderThread(QThread):
                 return file.read()
         except Exception as e:
             logger.error(f"Error extracting text from {txt_path}: {str(e)}")
+            raise
+            
+    def extract_text_from_word(self, word_path):
+        """Extract text from Word documents (.doc or .docx)"""
+        try:
+            # For .docx files, use python-docx
+            if word_path.lower().endswith('.docx'):
+                doc = docx.Document(word_path)
+                # Extract text from paragraphs
+                text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+                
+                # Extract text from tables if any
+                for table in doc.tables:
+                    for row in table.rows:
+                        for cell in row.cells:
+                            text += cell.text + " "
+                        text += "\n"
+                
+                return text
+            # For .doc files (old format)
+            elif word_path.lower().endswith('.doc'):
+                # Attempt to use docx for .doc files, it might work for some
+                try:
+                    doc = docx.Document(word_path)
+                    text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+                    return text
+                except Exception as doc_err:
+                    logger.warning(f"Could not process .doc file with docx: {str(doc_err)}")
+                    # Inform user that .doc files might not be fully supported
+                    self.status_update.emit(f"Aviso: Arquivos .doc antigos podem não ser processados corretamente: {word_path}")
+                    return f"[Não foi possível extrair texto completo de {os.path.basename(word_path)}. Considere converter para .docx ou .pdf.]"
+        except Exception as e:
+            logger.error(f"Error extracting text from Word file {word_path}: {str(e)}")
             raise
 
     def process_text(self, text, chunk_size=1000, overlap=100):
